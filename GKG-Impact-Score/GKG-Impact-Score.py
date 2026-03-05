@@ -11,7 +11,7 @@ zip_used = input("Enter ZIP code of where Greenspace is located: ")
 print("ZIP entered:", zip_used)
 
 EJSM = "GKG-Impact-Score/data/EJSM_DangerZone.csv"
-Income = r"C:/Users/sofie/OneDrive/Desktop/Income_DangerZone.csv"
+Income = "GKG-Impact-Score/data/Income_DangerZone.csv"
 SNAP = r"C:/Users/sofie/OneDrive/Desktop/TractSNAP_DangerZone.csv"
 Heat = "GKG-Impact-Score/data/DegHourDays_DangerZone.csv"
 ZIP_TRACT = r"C:/Users/sofie/OneDrive/Desktop/ZIP_TRACT_122025.xlsx"
@@ -208,4 +208,5 @@ plt.figtext(0.5, 0.01,
 
 
 plt.show()
+
 
