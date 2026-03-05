@@ -13,7 +13,7 @@ print("ZIP entered:", zip_used)
 EJSM = r"C:/Users/sofie/OneDrive/Desktop/EJSM_DangerZone.csv"
 Income = r"C:/Users/sofie/OneDrive/Desktop/Income_DangerZone.csv"
 SNAP = r"C:/Users/sofie/OneDrive/Desktop/TractSNAP_DangerZone.csv"
-Heat = r"C:/Users/sofie/OneDrive/Desktop/DegHourDays_DangerZone.csv"
+Heat = "GKG-Impact-Score/data/DegHourDays_DangerZone.csv"
 ZIP_TRACT = r"C:/Users/sofie/OneDrive/Desktop/ZIP_TRACT_122025.xlsx"
 
 df_ejsm = pd.read_csv(EJSM)
@@ -205,5 +205,6 @@ plt.figtext(0.5, 0.01,
             ha='center',
             fontsize=12,
             bbox=dict(boxstyle="round", alpha=0.3))
+
 
 plt.show()
