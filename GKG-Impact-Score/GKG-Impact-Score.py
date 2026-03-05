@@ -20,7 +20,7 @@ for uncertainty in how they might be prioritized.
 
 @st.cache_data
 def load_data():
-    df_ejsm = pd.read_csv("data/EJSM_DangerZone.csv")
+    df_ejsm = pd.read_csv("GKG-Impact-Score/data/EJSM_DangerZone.csv")
     df_income = pd.read_csv("data/Income_DangerZone.csv")
     df_snap = pd.read_csv("data/TractSNAP_DangerZone.csv")
     df_heat = pd.read_csv("GKG-Impact-Score/data/DegHourDays_DangerZone.csv")
@@ -132,4 +132,5 @@ if len(indices) > 0:
     st.pyplot(fig2)
 else:
     st.warning("Selected ZIP not found in merged dataset.")
+
 
