@@ -10,7 +10,7 @@ import seaborn as sns
 zip_used = input("Enter ZIP code of where Greenspace is located: ")
 print("ZIP entered:", zip_used)
 
-EJSM = r"C:/Users/sofie/OneDrive/Desktop/EJSM_DangerZone.csv"
+EJSM = "GKG-Impact-Score/data/EJSM_DangerZone.csv"
 Income = r"C:/Users/sofie/OneDrive/Desktop/Income_DangerZone.csv"
 SNAP = r"C:/Users/sofie/OneDrive/Desktop/TractSNAP_DangerZone.csv"
 Heat = "GKG-Impact-Score/data/DegHourDays_DangerZone.csv"
@@ -208,3 +208,4 @@ plt.figtext(0.5, 0.01,
 
 
 plt.show()
+
