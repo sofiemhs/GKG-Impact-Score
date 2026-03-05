@@ -24,7 +24,7 @@ def load_data():
     df_income = pd.read_csv("GKG-Impact-Score/data/Income_DangerZone.csv")
     df_snap = pd.read_csv("GKG-Impact-Score/data/TractSNAP_DangerZone.csv")
     df_heat = pd.read_csv("GKG-Impact-Score/data/DegHourDays_DangerZone.csv")
-    df_ziptract = pd.read_excel("data/ZIP_TRACT_122025.xlsx")
+    df_ziptract = pd.read_excel("GKG-Impact-Score/data/ZIP_TRACT_122025.xlsx")
     return df_ejsm, df_income, df_snap, df_heat, df_ziptract
 
 df_ejsm, df_income, df_snap, df_heat, df_ziptract = load_data()
@@ -132,6 +132,7 @@ if len(indices) > 0:
     st.pyplot(fig2)
 else:
     st.warning("Selected ZIP not found in merged dataset.")
+
 
 
 
