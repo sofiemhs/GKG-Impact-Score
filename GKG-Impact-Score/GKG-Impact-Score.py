@@ -14,7 +14,7 @@ EJSM = "GKG-Impact-Score/data/EJSM_DangerZone.csv"
 Income = "GKG-Impact-Score/data/Income_DangerZone.csv"
 SNAP = "GKG-Impact-Score/data/TractSNAP_DangerZone.csv"
 Heat = "GKG-Impact-Score/data/DegHourDays_DangerZone.csv"
-ZIP_TRACT = r"C:/Users/sofie/OneDrive/Desktop/ZIP_TRACT_122025.xlsx"
+ZIP_TRACT = "GKG-Impact-Score/data/ZIP_TRACT_122025.xlsx"
 
 df_ejsm = pd.read_csv(EJSM)
 df_income = pd.read_csv(Income)
@@ -208,6 +208,7 @@ plt.figtext(0.5, 0.01,
 
 
 plt.show()
+
 
 
 
