@@ -10,13 +10,21 @@ st.set_page_config(layout="wide", page_title="GKG Impact Dashboard")
 # --- HEADER SECTION ---
 st.title("🌿 Good Karma Gardens: Impact Analysis Dashboard")
 
-st.markdown("""
-### **How to use this tool:**
-1. **Enter a ZIP Code** in the sidebar to see the specific impact score for that neighborhood.
-2. **The Impact Score** is calculated using **10,000 Monte Carlo simulations** to account for varying environmental and social priorities.
-3. **Explore the Deep-Dives** below to see how each individual factor (Heat, Income, etc.) is distributed across LA County. 
-4. **Red Bins** in the graphs represent the **'Danger Zone'**—tracts that are more than 1 Standard Deviation away from the County mean.
-""")
+with st.expander("📖 About This Project & Methodology (Click to Expand)"):
+    st.markdown("""
+    ### **Our Research Question**
+    *What impact are GKG builds having, and where is the need for green space conversion greatest?*
+    
+    ### **The Methodology**
+    To answer this, we developed a **'Danger Zone' Index** using key factors that influence the necessity of community gardens. We utilize a **Monte Carlo Simulation** (10,000 iterations) to calculate an overall impact score for every census tract in Los Angeles County. 
+    
+    By shifting the 'weights' of importance between Environmental, Social, and Financial factors 10,000 times, we ensure our high-impact areas remain high-impact regardless of which specific metric you prioritize.
+    
+    ### **How to Use:**
+    1. **Enter a ZIP Code** in the sidebar to see the specific impact score for that neighborhood.
+    2. **View the Local Variability:** See how much the impact score "swings" based on different priorities.
+    3. **Regional Context:** See where your ZIP stands compared to the rest of the 2,000+ tracts in LA County.
+    """)
 
 # ----------------------------
 # 1. Data Loading & Processing
@@ -34,28 +42,25 @@ def load_all_data():
     if data_path is None:
         raise FileNotFoundError("Could not find the 'data' folder.")
 
-    # EJSM
+    # Data Loaders
     df_ejsm = pd.read_csv(f"{data_path}/EJSM_Origonal.csv")
     df_ejsm.columns = df_ejsm.columns.str.strip()
     df_ejsm['GEOID10'] = df_ejsm['Tract_1'].astype(str).str.split('.').str[0].str.zfill(11)
     df_ejsm['CIscore'] = pd.to_numeric(df_ejsm['CIscore'], errors='coerce')
     df_ejsm = df_ejsm.dropna(subset=['CIscore'])
 
-    # Income
     df_income = pd.read_csv(f"{data_path}/Income_original.csv")
     df_income['med_hh_income'] = df_income['med_hh_income'].astype(str).str.replace('%','').str.replace(',','')
     df_income['med_hh_income'] = pd.to_numeric(df_income['med_hh_income'], errors='coerce')
     df_income = df_income[df_income['med_hh_income'].notna() & (df_income['med_hh_income'] != 0)]
     df_income['GEOID10'] = df_income['tract'].astype(str).str.split('.').str[0].str.zfill(11)
 
-    # Heat Burden
     df_heat = pd.read_csv(f"{data_path}/DegHourDays_Original.csv")
     df_heat.columns = df_heat.columns.str.strip()
     df_heat['DegHourDay'] = pd.to_numeric(df_heat['DegHourDay'], errors='coerce')
     df_heat = df_heat.dropna(subset=['DegHourDay'])
     df_heat['GEOID10'] = df_heat['FIPS'].astype(str).str.split('.').str[0].str.zfill(11)
 
-    # SNAP
     df_snap = pd.read_csv(f"{data_path}/Food_Deserts (1).csv")
     df_snap.columns = df_snap.columns.str.strip()
     df_snap['TractSNAP'] = pd.to_numeric(df_snap['TractSNAP'], errors='coerce')
@@ -64,11 +69,11 @@ def load_all_data():
     df_snap['SNAP_pct'] = (df_snap['TractSNAP'] / df_snap['Pop2010']) * 100
     df_snap['GEOID10'] = df_snap['CT10'].astype(str).str.split('.').str[0].str.zfill(11)
 
-    # Crosswalk
     df_ziptract = pd.read_excel(f"{data_path}/ZIP_TRACT_122025.xlsx", engine='openpyxl')
     df_ziptract['ZIP'] = df_ziptract['ZIP'].astype(str).str.zfill(5)
     df_ziptract['GEOID10'] = df_ziptract['TRACT'].astype(str).str.split('.').str[0].str.zfill(11)
 
+    # Standardization
     def std_col(df, col, inv=False):
         s = (df[col] - df[col].min()) / (df[col].max() - df[col].min())
         return 1 - s if inv else s
@@ -91,10 +96,9 @@ except Exception as e:
     st.stop()
 
 # ----------------------------
-# 2. Main Analytics (10k Monte Carlo)
+# 2. Main Analytics
 # ----------------------------
 
-# ZIP CODE INPUT (Sidebar)
 st.sidebar.header("📍 Location Filter")
 zip_in = st.sidebar.text_input("Enter any ZIP Code:", "91505")
 match = df_ziptract[df_ziptract['ZIP'] == zip_in]
@@ -102,83 +106,84 @@ match = df_ziptract[df_ziptract['ZIP'] == zip_in]
 if not match.empty:
     target_geoid = match.iloc[0]['GEOID10']
     
-    # Run 10,000 Iterations
+    # 10,000 Iterations
     x_matrix = df_comb[['s_e','s_i','s_h','s_s']].to_numpy()
     num_iters = 10000 
     weights = np.random.uniform(0, 1, (num_iters, 4))
     weights /= weights.sum(axis=1, keepdims=True)
-    
     sim_results = np.dot(weights, x_matrix.T)
     
-    # 1. LOCAL SECTION (TOP)
-    st.header(f"🎯 Local Impact Results: ZIP {zip_in}")
+    # A. LOCAL SECTION
+    st.header(f"🎯 Impact Analysis: ZIP {zip_in}")
     idx = np.where(df_comb['GEOID10'].values == target_geoid)[0]
     
     if len(idx) > 0:
         d = sim_results[:, idx[0]]
         m, s = norm.fit(d)
         
-        # Big Hero Stat
-        st.metric(label=f"ESTIMATED IMPACT SCORE", value=f"{m:.3f}", delta=f"± {s:.3f} SD")
+        st.metric(label="Calculated Impact Score (Mean)", value=f"{m:.3f}", delta=f"± {s:.3f} SD")
 
         col_local_l, col_local_r = st.columns([2, 1])
         with col_local_l:
-            fig_local, ax_local = plt.subplots(figsize=(10, 5))
+            fig_local, ax_local = plt.subplots(figsize=(10, 4.5))
             ax_local.hist(d, bins=30, color='#aed6f1', edgecolor='white', density=True, alpha=0.7)
             x_fit = np.linspace(min(d), max(d), 100)
-            ax_local.plot(x_fit, norm.pdf(x_fit, m, s), color='#2e86c1', lw=3, label='Normal Fit')
+            ax_local.plot(x_fit, norm.pdf(x_fit, m, s), color='#2e86c1', lw=3, label='Normal Distribution Fit')
             ax_local.axvline(m, color='#1b4f72', lw=2, label=f'Mean: {m:.3f}')
-            ax_local.axvline(m + s, color='#e74c3c', ls='--', lw=1.5, label=f'+1 SD')
-            ax_local.axvline(m - s, color='#e74c3c', ls='--', lw=1.5, label=f'-1 SD')
-            ax_local.set_title(f"Impact Distribution for ZIP {zip_in}")
-            ax_local.legend(loc='upper right')
+            ax_local.axvline(m + s, color='#e74c3c', ls='--', lw=1.5, label='+1 SD Bound')
+            ax_local.axvline(m - s, color='#e74c3c', ls='--', lw=1.5, label='-1 SD Bound')
+            ax_local.set_title("Probability Distribution of Impact Score")
+            ax_local.legend(loc='upper right', fontsize='small')
             st.pyplot(fig_local)
         
         with col_local_r:
-            st.write("### Statistical Summary")
-            st.write(f"Based on 10,000 simulated priority weightings, census tract **{target_geoid}** shows the following impact potential:")
+            st.markdown("### **Understanding the Graph**")
+            st.write(f"""
+            This graph shows the range of possible impact scores for ZIP **{zip_in}**.
+            Because different grants prioritize different things (like water vs social equity),
+            we ran 10,000 scenarios. 
+            
+            The **narrower** the curve, the more "certain" the impact is. 
+            The **further right** the curve sits, the higher the need for a garden build.
+            """)
             st.table(pd.DataFrame({
-                "Metric": ["Average Score", "Uncertainty (SD)", "Impact Range"],
+                "Metric": ["Avg Score", "Variance", "Confidence Range"],
                 "Value": [f"{m:.4f}", f"{s:.4f}", f"{m-s:.3f} to {m+s:.3f}"]
             }))
     
     st.divider()
 
-    # 2. REGIONAL SECTION (BOTTOM)
-    st.header("🌎 Regional Context (LA County)")
+    # B. REGIONAL SECTION (Now smaller)
+    st.header("🌎 County-Wide Comparison")
+    st.write("This shows where your selected ZIP stands compared to all other census tracts in LA County.")
+    
     median_scores = np.median(sim_results, axis=0)
     p25 = np.percentile(sim_results, 25, axis=0)
     p75 = np.percentile(sim_results, 75, axis=0)
     sorted_idx = np.argsort(median_scores)
 
-    fig_reg, ax_reg = plt.subplots(figsize=(12, 5))
+    fig_reg, ax_reg = plt.subplots(figsize=(12, 3.5)) # Reduced height
     ax_reg.fill_between(range(len(median_scores)), p25[sorted_idx], p75[sorted_idx], 
-                        alpha=0.2, label='25th-75th Percentile', color='#3498db')
-    ax_reg.plot(median_scores[sorted_idx], color='#2980b9', lw=2.5, label='County Median Line')
-    ax_reg.set_ylabel("Weighted Impact Index")
-    ax_reg.set_xlabel("Census Tracts (Ranked Low to High Impact)")
+                        alpha=0.2, label='County IQR (25-75th)', color='#3498db')
+    ax_reg.plot(median_scores[sorted_idx], color='#2980b9', lw=2, label='Median Trendline')
+    ax_reg.set_ylabel("Impact Index")
+    ax_reg.set_xlabel("Tracts Ranked by Need")
     ax_reg.grid(True, which='both', linestyle='--', alpha=0.3)
-    
-    # Stats overlay
-    textstr = '\n'.join((r'Mean SD = 0.0465', r'Mean SE = 0.000465'))
-    props = dict(boxstyle='round', facecolor='white', alpha=0.5)
-    ax_reg.text(0.05, 0.95, textstr, transform=ax_reg.transAxes, fontsize=10, verticalalignment='top', bbox=props)
-    
-    ax_reg.legend(loc='lower right')
+    ax_reg.legend(loc='lower right', fontsize='x-small')
     st.pyplot(fig_reg)
 
 else:
-    st.sidebar.error(f"ZIP {zip_in} not found. Please try another LA County ZIP.")
+    st.sidebar.error(f"ZIP {zip_in} not found.")
 
 st.divider()
 
 # ----------------------------
-# 3. Deep-Dive Section (Unchanged Tables)
+# 3. Deep-Dive & References
 # ----------------------------
 
-st.header("🔍 Factor Descriptions & Distributions")
+st.header("🔍 Detailed Factor Analysis")
 
-def plot_component(df, col, name, unit, description, is_high_danger=True, bins=100):
+def plot_component(df, col, name, unit, description, source_info, is_high_danger=True, bins=100):
     data = df[col].dropna()
     mean_v, std_v = data.mean(), data.std()
     thresh = mean_v + std_v if is_high_danger else mean_v - std_v
@@ -189,9 +194,10 @@ def plot_component(df, col, name, unit, description, is_high_danger=True, bins=1
     with c1:
         st.subheader(name)
         st.write(description)
+        st.caption(f"**Source:** {source_info}")
         st.table(pd.DataFrame({
-            "Metric": ["LA County Mean", "Standard Deviation", "Danger Threshold", "Tracts in Danger Zone"],
-            "Details": [f"{mean_v:,.2f} {unit}", f"{std_v:,.2f}", f"{zone_sym} {thresh:,.2f}", str(len(danger_zone))]
+            "Metric": ["Mean", "SD", "Danger Threshold", "Tracts in Danger"],
+            "Details": [f"{mean_v:,.2f}", f"{std_v:,.2f}", f"{zone_sym} {thresh:,.2f}", str(len(danger_zone))]
         }))
 
     with c2:
@@ -205,24 +211,33 @@ def plot_component(df, col, name, unit, description, is_high_danger=True, bins=1
         x = np.linspace(data.min(), data.max(), 500)
         pdf = norm.pdf(x, mean_v, std_v)
         bin_width = bins[1] - bins[0]
-        ax.plot(x, pdf * len(data) * bin_width, color='black', lw=2, label='Normal Curve')
-        ax.axvline(mean_v, color='black', ls='-', label='Mean')
-        ax.axvline(thresh, color='#e74c3c', ls='--', lw=2, label='Danger Threshold')
-        ax.set_xlabel(f"{name} ({unit})")
-        ax.set_ylabel("Frequency")
-        ax.legend()
+        ax.plot(x, pdf * len(data) * bin_width, color='black', lw=1.5)
+        ax.axvline(mean_v, color='black', label='Mean')
+        ax.axvline(thresh, color='#e74c3c', ls='--', label='Danger Zone Cutoff')
+        ax.set_xlabel(unit)
+        ax.legend(fontsize='small')
         st.pyplot(fig)
 
-# Factor Content
-ejsm_desc = "The **Environmental Justice Screening Method (EJSM)** identifies communities facing cumulative impacts from multiple pollution sources and social vulnerabilities."
-income_desc = "**Median Household Income** tracks financial stability. Lower income areas often lack the private funds for high-quality landscaping and community cooling."
-heat_desc = "**Heat Burden** (Degree Hour Days) measures the intensity of the urban heat island effect. High-heat areas are critical targets for garden shade and cooling."
-snap_desc = "**SNAP Participation** acts as a proxy for food insecurity, identifying tracts where urban agriculture can provide vital fresh produce access."
+# DESCRIPTIONS AND SOURCES
+ejsm_desc = "The **EJSM Score** evaluates hazard proximity, health risk, and social vulnerability. High scores represent communities facing cumulative pollution impacts."
+ejsm_src = "EJSM Social Vulnerability Score, Data retrieved from [insert date/link here]"
 
-plot_component(df_ejsm, 'CIscore', 'Environmental Justice (EJSM)', 'Score', ejsm_desc, is_high_danger=False, bins=20)
+income_desc = "**Median Household Income** tracks areas where financial barriers may prevent access to private green space and cooling resources."
+income_src = "U.S. Census Bureau, American Community Survey (ACS) [insert year here]"
+
+heat_desc = "**Heat Burden** (Degree Hour Days) measures urban heat island intensity. High-heat areas are prioritized for garden shade and cooling."
+heat_src = "Safe Clean Water Program (SCWP) Heat Days Data, [insert year/link here]"
+
+snap_desc = "**SNAP Participation** acts as a proxy for food insecurity, identifying tracts where urban agriculture can provide vital fresh produce access."
+snap_src = "USDA Food Environment Atlas / SNAP Enrollment Data [insert year here]"
+
+plot_component(df_ejsm, 'CIscore', 'Environmental Justice (EJSM)', 'Score', ejsm_desc, ejsm_src, is_high_danger=False, bins=20)
 st.divider()
-plot_component(df_income, 'med_hh_income', 'Median HH Income', '$', income_desc, is_high_danger=False, bins=250)
+plot_component(df_income, 'med_hh_income', 'Median HH Income', 'Dollars ($)', income_desc, income_src, is_high_danger=False, bins=250)
 st.divider()
-plot_component(df_heat, 'DegHourDay', 'Heat Burden', 'DegHrDays', heat_desc, is_high_danger=True, bins=150)
+plot_component(df_heat, 'DegHourDay', 'Heat Burden', 'Degree Hour Days', heat_desc, heat_src, is_high_danger=True, bins=150)
 st.divider()
-plot_component(df_snap, 'SNAP_pct', 'Food Access (SNAP %)', '% Pop', snap_desc, is_high_danger=True, bins=150)
+plot_component(df_snap, 'SNAP_pct', 'Food Access (SNAP %)', '% of Population', snap_desc, snap_src, is_high_danger=True, bins=150)
+
+st.sidebar.markdown("---")
+st.sidebar.info("This tool was developed to help **Good Karma Gardens** demonstrate the quantifiable value of lawn-to-garden conversions.")
