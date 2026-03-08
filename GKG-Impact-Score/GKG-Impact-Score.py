@@ -141,7 +141,12 @@ if not match.empty:
             ax.hist(d, bins=30, color='#aed6f1', edgecolor='white', density=True, alpha=0.7)
             x_range = np.linspace(min(d), max(d), 100)
             ax.plot(x_range, norm.pdf(x_range, m, s), color='#2e86c1', lw=3, label='Monte Carlo Fit')
+            
+            # --- Visual SD Bounds on Graphic ---
             ax.axvline(m, color='#1b4f72', lw=2, label=f'Mean: {m:.3f}')
+            ax.axvline(m-s, color='#e74c3c', ls='--', lw=1.5, label=f'-1 SD: {m-s:.3f}')
+            ax.axvline(m+s, color='#e74c3c', ls='--', lw=1.5, label=f'+1 SD: {m+s:.3f}')
+            
             ax.set_title(f"Simulation Variance for ZIP {zip_in} (Tract {target_geoid})")
             ax.set_xlabel("Potential Standardized Impact Score")
             ax.legend(fontsize='small')
@@ -149,20 +154,24 @@ if not match.empty:
         with col_r:
             st.markdown("### **Statistical Summary**")
             st.markdown("*An explanation of the simulation results for this tract:*")
+            
+            # --- UPDATED SIMULATED VARIANCE TABLE ---
             st.table(pd.DataFrame({
                 "Metric": ["Avg Score", "Uncertainty (SD)", "Lower Bound (-1 SD)", "Upper Bound (+1 SD)"], 
                 "Value": [f"{m:.4f}", f"{s:.4f}", f"{m-s:.4f}", f"{m+s:.4f}"]
             }))
-            st.caption("**What are SD Bounds?** Standard Deviation (SD) shows how much the score changes when we prioritize different factors. 68% of all scenarios fall between the Lower and Upper bounds.")
+            st.caption("**What are SD Bounds?** Standard Deviation (SD) shows how much the score changes when we prioritize different factors. 68% of all scenarios fall between the Red Dashed lines on the graph.")
 
     st.divider()
 
 # ----------------------------
-# 3. Factor Deep-Dive (Standard Deviation Curve Fit)
+# 3. Factor Deep-Dive (Unchanged)
 # ----------------------------
 
 st.header("🔍 Factor Distributions & Danger Zones")
 st.write("These graphs show how this specific neighborhood compares to the rest of Los Angeles County. The **Red Areas** are the 'Danger Zones' where the need is most extreme.")
+
+
 
 def plot_component(df, col, name, unit, description, source_info, is_high_danger=True, bins=100):
     data = df[col].dropna()
