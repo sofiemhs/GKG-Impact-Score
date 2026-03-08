@@ -13,20 +13,19 @@ st.title("🌿 Good Karma Gardens: Impact Analysis Dashboard")
 with st.expander("📖 Methodology, Standardization & Instructions (Click to Expand)"):
     st.markdown("""
     ### **1. How to Use This Tool**
-    * **Update Location:** Use the **Sidebar on the left** to enter any 5-digit Los Angeles County ZIP code. The dashboard will automatically update all calculations for that specific area.
+    * **Update Location:** Use the **Sidebar on the left** to enter any 5-digit Los Angeles County ZIP code.
     
     ### **2. How We Standardize the Data**
     To compare different units (like Dollars vs. Heat Degrees), we scale every factor between **0.0 and 1.0**:
     * **High Value (1.0) = High Need:** For Heat and SNAP, a higher raw number equals a higher score.
-    * **Inverse Scaling:** For Income, a **lower** raw number equals a higher impact score (reflecting higher financial need).
+    * **Inverse Scaling:** For Income, a **lower** raw number equals a higher impact score.
     * **Formula:** $x_{std} = \\frac{x - min(x)}{max(x) - min(x)}$
     
     ### **3. Impact Tier Qualifications**
-    We categorize the results based on the 10,000-iteration Monte Carlo mean:
-    * 🟢 **Low Impact (0.00 - 0.15):** High-resource areas; environmental metrics are within healthy Los Angeles averages.
-    * 🟡 **Medium Impact (0.15 - 0.30):** Moderate need; shows emerging vulnerability in at least two categories.
-    * 🟠 **High Impact (0.30 - 0.45):** Significant need; these areas typically rank in the top 25% for pollution or food insecurity.
-    * 🔴 **Very High Impact (0.45+):** The **'Danger Zone'**; these tracts represent the most critical opportunities for lawn-to-garden conversion.
+    * 🟢 **Low Impact (0.00 - 0.15):** High-resource areas.
+    * 🟡 **Medium Impact (0.15 - 0.30):** Moderate need.
+    * 🟠 **High Impact (0.30 - 0.45):** Significant vulnerability.
+    * 🔴 **Very High Impact (0.45+):** **'Danger Zone'**; critical need for intervention.
     """)
 
 # ----------------------------
@@ -58,7 +57,7 @@ def load_all_data():
     df_income = df_income[df_income['med_hh_income'].notna() & (df_income['med_hh_income'] != 0)]
     df_income['GEOID10'] = df_income['tract'].astype(str).str.split('.').str[0].str.zfill(11)
 
-    df_heat = pd.read_csv(f"{data_path}/DegHourDays_Original.csv")
+    df_heat = pd.read_csv(f"{data_path}/DegHourDay_Original.csv")
     df_heat.columns = df_heat.columns.str.strip()
     df_heat['DegHourDay'] = pd.to_numeric(df_heat['DegHourDay'], errors='coerce')
     df_heat = df_heat.dropna(subset=['DegHourDay'])
@@ -133,45 +132,64 @@ if not match.empty:
             <p style="color:white; font-size:1.2rem; margin-top:10px;">{desc}</p></div>""", unsafe_allow_html=True)
 
         st.metric(label="Impact Score (The 'Need' Level)", value=f"{m:.3f}", delta=f"± {s:.3f} Variability")
-        st.info(f"**What this number means:** This is the 'Average Need' for ZIP {zip_in}. 0 is perfect, 1 is critical. A score of {m:.3f} suggests this area has a {tier.lower()} priority for conversion.")
-
+        
         col_l, col_r = st.columns([2, 1])
         with col_l:
             fig, ax = plt.subplots(figsize=(10, 4.5))
             ax.hist(d, bins=30, color='#aed6f1', edgecolor='white', density=True, alpha=0.7)
             x_range = np.linspace(min(d), max(d), 100)
             ax.plot(x_range, norm.pdf(x_range, m, s), color='#2e86c1', lw=3, label='Monte Carlo Fit')
-            
-            # --- Visual SD Bounds on Graphic ---
             ax.axvline(m, color='#1b4f72', lw=2, label=f'Mean: {m:.3f}')
             ax.axvline(m-s, color='#e74c3c', ls='--', lw=1.5, label=f'-1 SD: {m-s:.3f}')
             ax.axvline(m+s, color='#e74c3c', ls='--', lw=1.5, label=f'+1 SD: {m+s:.3f}')
-            
-            ax.set_title(f"Simulation Variance for ZIP {zip_in} (Tract {target_geoid})")
+            ax.set_title(f"Simulation Variance for ZIP {zip_in}")
             ax.set_xlabel("Potential Standardized Impact Score")
             ax.legend(fontsize='small')
             st.pyplot(fig)
         with col_r:
             st.markdown("### **Statistical Summary**")
-            st.markdown("*An explanation of the simulation results for this tract:*")
-            
-            # --- UPDATED SIMULATED VARIANCE TABLE ---
             st.table(pd.DataFrame({
                 "Metric": ["Avg Score", "Uncertainty (SD)", "Lower Bound (-1 SD)", "Upper Bound (+1 SD)"], 
                 "Value": [f"{m:.4f}", f"{s:.4f}", f"{m-s:.4f}", f"{m+s:.4f}"]
             }))
-            st.caption("**What are SD Bounds?** Standard Deviation (SD) shows how much the score changes when we prioritize different factors. 68% of all scenarios fall between the Red Dashed lines on the graph.")
+            st.caption("**What are SD Bounds?** Standard Deviation (SD) shows how much the score changes when we prioritize different factors. 68% of scenarios fall between the Red Dashed lines.")
 
     st.divider()
 
+    # --- THE CDF CURVE RETURNS ---
+    st.header("🌎 County-Wide Impact Ranking (CDF)")
+    st.write("This shows where your selected neighborhood ranks against all 2,000+ tracts in LA County. Higher on the curve means higher need.")
+    
+    median_scores = np.median(sim_results, axis=0)
+    p25 = np.percentile(sim_results, 25, axis=0)
+    p75 = np.percentile(sim_results, 75, axis=0)
+    sorted_idx = np.argsort(median_scores)
+
+    fig_reg, ax_reg = plt.subplots(figsize=(12, 4)) 
+    ax_reg.fill_between(range(len(median_scores)), p25[sorted_idx], p75[sorted_idx], alpha=0.2, color='#3498db', label='25th-75th Percentile Range')
+    ax_reg.plot(median_scores[sorted_idx], color='#2980b9', lw=2, label='County Median Trendline')
+    
+    # Highlight specific ZIP on the curve
+    if len(idx) > 0:
+        local_rank = np.where(sorted_idx == idx[0])[0][0]
+        ax_reg.scatter(local_rank, m, color='red', s=100, zorder=5, label=f'ZIP {zip_in} Rank')
+        ax_reg.annotate(f"ZIP {zip_in}", (local_rank, m), textcoords="offset points", xytext=(0,10), ha='center', color='red', weight='bold')
+
+    ax_reg.set_title("LA County Cumulative Need Ranking")
+    ax_reg.set_ylabel("Impact Index (0-1)")
+    ax_reg.set_xlabel("Census Tracts (Ranked from Lowest to Highest Need)")
+    ax_reg.legend(loc='lower right', fontsize='small')
+    st.pyplot(fig_reg)
+
+st.divider()
+
 # ----------------------------
-# 3. Factor Deep-Dive (Unchanged)
+# 3. Factor Deep-Dive (SD Curve Fit)
 # ----------------------------
+
 
 st.header("🔍 Factor Distributions & Danger Zones")
-st.write("These graphs show how this specific neighborhood compares to the rest of Los Angeles County. The **Red Areas** are the 'Danger Zones' where the need is most extreme.")
-
-
+st.write("The **Red Areas** are the 'Danger Zones' (Top 16% of need).")
 
 def plot_component(df, col, name, unit, description, source_info, is_high_danger=True, bins=100):
     data = df[col].dropna()
@@ -187,12 +205,11 @@ def plot_component(df, col, name, unit, description, source_info, is_high_danger
             "Metric": ["County Mean", "Std Deviation", "Danger Cutoff"], 
             "Value": [f"{mean_v:,.2f}", f"{std_v:,.2f}", f"{thresh:,.2f}"]
         }))
-        st.markdown(f"**Interpretation:** The average tract in LA has a {name} of **{mean_v:,.2f}**. Once a tract hits **{thresh:,.2f}**, it enters the 'Danger Zone' (Red).")
+        st.markdown(f"**Interpretation:** Average LA tract has a {name} of **{mean_v:,.2f}**. Tracts at **{thresh:,.2f}** enter the 'Danger Zone' (Red).")
 
     with c2:
         fig, ax = plt.subplots(figsize=(10, 4))
         counts, bin_edges, patches = ax.hist(data, bins=bins, color='#bdc3c7', alpha=0.8, density=True)
-        
         for i in range(len(patches)):
             mid = (bin_edges[i] + bin_edges[i+1]) / 2
             if (is_high_danger and mid > thresh) or (not is_high_danger and mid < thresh):
@@ -200,25 +217,17 @@ def plot_component(df, col, name, unit, description, source_info, is_high_danger
         
         x_axis = np.linspace(data.min(), data.max(), 500)
         ax.plot(x_axis, norm.pdf(x_axis, mean_v, std_v), color='black', lw=2, label='Normal Distribution')
-        
-        ax.axvline(mean_v, color='black', ls='-', label='County Mean')
+        ax.axvline(mean_v, color='black', label='County Mean')
         ax.axvline(thresh, color='#e74c3c', ls='--', lw=2, label='Danger Threshold')
         ax.set_title(f"LA County Distribution: {name}")
         ax.set_xlabel(unit)
-        ax.set_ylabel("Probability Density")
         ax.legend(fontsize='small')
         st.pyplot(fig)
 
-# Sources & Factors
-ejsm_src = "USC & Occidental College Green Zones Program (2022)"
-income_src = "U.S. Census Bureau ACS (2022-2024 Estimates)"
-heat_src = "Safe Clean Water Program (SCWP) LA"
-snap_src = "USDA Food Access Research Atlas"
-
-plot_component(df_ejsm, 'CIscore', 'Environmental Justice (EJSM)', 'Score', "Combines pollution exposure with social vulnerability.", ejsm_src, is_high_danger=False, bins=20)
+plot_component(df_ejsm, 'CIscore', 'Environmental Justice (EJSM)', 'Score', "Pollution exposure and vulnerability.", "USC/Occidental College (2022)", is_high_danger=False, bins=20)
 st.divider()
-plot_component(df_income, 'med_hh_income', 'Median HH Income', 'USD ($)', "Tracks financial health. High scores are given to lower incomes.", income_src, is_high_danger=False, bins=250)
+plot_component(df_income, 'med_hh_income', 'Median HH Income', 'USD ($)', "Lower income = Higher need.", "U.S. Census Bureau", is_high_danger=False, bins=250)
 st.divider()
-plot_component(df_heat, 'DegHourDay', 'Heat Burden', 'Deg-Hr Days', "Measures the intensity of the Urban Heat Island effect.", heat_src, is_high_danger=True, bins=150)
+plot_component(df_heat, 'DegHourDay', 'Heat Burden', 'Deg-Hr Days', "Urban Heat Island intensity.", "SCWP LA", is_high_danger=True, bins=150)
 st.divider()
-plot_component(df_snap, 'SNAP_pct', 'Food Access (SNAP %)', '% Pop', "Tracks population receiving food assistance.", snap_src, is_high_danger=True, bins=150)
+plot_component(df_snap, 'SNAP_pct', 'Food Access (SNAP %)', '% Pop', "Food insecurity proxy.", "USDA Data", is_high_danger=True, bins=150)
