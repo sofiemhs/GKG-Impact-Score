@@ -15,7 +15,7 @@ st.markdown("""
 1. **Enter a ZIP Code** in the sidebar to see the specific impact score for that neighborhood.
 2. **The Impact Score** is calculated using **10,000 Monte Carlo simulations** to account for varying environmental and social priorities.
 3. **Explore the Deep-Dives** below to see how each individual factor (Heat, Income, etc.) is distributed across LA County. 
-4. **Red Bins** in the graphs represent the **'Danger Zone'**—tracts that are more than 1 Standard Deviation away from the County mean[cite: 257, 285, 343].
+4. **Red Bins** in the graphs represent the **'Danger Zone'**—tracts that are more than 1 Standard Deviation away from the County mean.
 """)
 
 # ----------------------------
@@ -34,28 +34,28 @@ def load_all_data():
     if data_path is None:
         raise FileNotFoundError("Could not find the 'data' folder.")
 
-    # EJSM - Environmental Justice Screening Method [cite: 245]
+    # EJSM
     df_ejsm = pd.read_csv(f"{data_path}/EJSM_Origonal.csv")
     df_ejsm.columns = df_ejsm.columns.str.strip()
     df_ejsm['GEOID10'] = df_ejsm['Tract_1'].astype(str).str.split('.').str[0].str.zfill(11)
     df_ejsm['CIscore'] = pd.to_numeric(df_ejsm['CIscore'], errors='coerce')
     df_ejsm = df_ejsm.dropna(subset=['CIscore'])
 
-    # Median Household Income [cite: 275]
+    # Income
     df_income = pd.read_csv(f"{data_path}/Income_original.csv")
     df_income['med_hh_income'] = df_income['med_hh_income'].astype(str).str.replace('%','').str.replace(',','')
     df_income['med_hh_income'] = pd.to_numeric(df_income['med_hh_income'], errors='coerce')
     df_income = df_income[df_income['med_hh_income'].notna() & (df_income['med_hh_income'] != 0)]
     df_income['GEOID10'] = df_income['tract'].astype(str).str.split('.').str[0].str.zfill(11)
 
-    # Urban Heat - Degree Hour Days [cite: 334, 335]
+    # Heat Burden
     df_heat = pd.read_csv(f"{data_path}/DegHourDays_Original.csv")
     df_heat.columns = df_heat.columns.str.strip()
     df_heat['DegHourDay'] = pd.to_numeric(df_heat['DegHourDay'], errors='coerce')
     df_heat = df_heat.dropna(subset=['DegHourDay'])
     df_heat['GEOID10'] = df_heat['FIPS'].astype(str).str.split('.').str[0].str.zfill(11)
 
-    # Food Access - SNAP Participation [cite: 280, 281]
+    # SNAP
     df_snap = pd.read_csv(f"{data_path}/Food_Deserts (1).csv")
     df_snap.columns = df_snap.columns.str.strip()
     df_snap['TractSNAP'] = pd.to_numeric(df_snap['TractSNAP'], errors='coerce')
@@ -64,12 +64,11 @@ def load_all_data():
     df_snap['SNAP_pct'] = (df_snap['TractSNAP'] / df_snap['Pop2010']) * 100
     df_snap['GEOID10'] = df_snap['CT10'].astype(str).str.split('.').str[0].str.zfill(11)
 
-    # ZIP to TRACT Crosswalk [cite: 387]
+    # Crosswalk
     df_ziptract = pd.read_excel(f"{data_path}/ZIP_TRACT_122025.xlsx", engine='openpyxl')
     df_ziptract['ZIP'] = df_ziptract['ZIP'].astype(str).str.zfill(5)
     df_ziptract['GEOID10'] = df_ziptract['TRACT'].astype(str).str.split('.').str[0].str.zfill(11)
 
-    # Standardize measured factors (0 to 1) for the impact score equation [cite: 357]
     def std_col(df, col, inv=False):
         s = (df[col] - df[col].min()) / (df[col].max() - df[col].min())
         return 1 - s if inv else s
@@ -92,7 +91,7 @@ except Exception as e:
     st.stop()
 
 # ----------------------------
-# 2. Main Analytics (Monte Carlo)
+# 2. Main Analytics (10k Monte Carlo)
 # ----------------------------
 
 st.sidebar.header("📍 Location Filter")
@@ -102,20 +101,17 @@ match = df_ziptract[df_ziptract['ZIP'] == zip_in]
 if not match.empty:
     target_geoid = match.iloc[0]['GEOID10']
     
-    # Run 10,000 Monte Carlo Simulations 
+    # 10,000 Iterations
     x_matrix = df_comb[['s_e','s_i','s_h','s_s']].to_numpy()
     num_iters = 10000 
     weights = np.random.uniform(0, 1, (num_iters, 4))
     weights /= weights.sum(axis=1, keepdims=True)
     
-    # Calculate Impact Scores: y = A1x1 + A2x2 + A3x3 + A4x4 [cite: 357]
     sim_results = np.dot(weights, x_matrix.T)
     
-    # Percentiles for CDF formatting 
     median_scores = np.median(sim_results, axis=0)
     p25 = np.percentile(sim_results, 25, axis=0)
     p75 = np.percentile(sim_results, 75, axis=0)
-    
     sorted_idx = np.argsort(median_scores)
     
     col_a, col_b = st.columns(2)
@@ -123,22 +119,18 @@ if not match.empty:
         st.subheader("Monte Carlo Simulation of Weighted Index")
         fig, ax = plt.subplots(figsize=(10, 6))
         
-        # Restore the specific CDF Look [cite: 366]
+        # CDF Formatting Fixed
         ax.fill_between(range(len(median_scores)), p25[sorted_idx], p75[sorted_idx], 
-                        color='alpha', alpha=0.2, label='25th-75th Percentile', color='#3498db')
+                        alpha=0.2, label='25th-75th Percentile', color='#3498db')
         ax.plot(median_scores[sorted_idx], color='#2980b9', lw=2.5, label='Median')
         
         ax.set_ylabel("Weighted Standardized Index")
         ax.set_xlabel("Census Tracts (Sorted)")
         ax.grid(True, which='both', linestyle='--', alpha=0.5)
         
-        # Add the SD and SE stats box 
-        textstr = '\n'.join((
-            r'Mean SD = 0.0465',
-            r'Mean SE = 0.000465'))
+        textstr = '\n'.join((r'Mean SD = 0.0465', r'Mean SE = 0.000465'))
         props = dict(boxstyle='round', facecolor='white', alpha=0.5)
-        ax.text(0.05, 0.95, textstr, transform=ax.transAxes, fontsize=10,
-                verticalalignment='top', bbox=props)
+        ax.text(0.05, 0.95, textstr, transform=ax.transAxes, fontsize=10, verticalalignment='top', bbox=props)
         
         ax.legend(loc='lower right')
         st.pyplot(fig)
@@ -160,10 +152,10 @@ if not match.empty:
 st.divider()
 
 # ----------------------------
-# 3. Factor Deep-Dives
+# 3. Deep-Dive Section
 # ----------------------------
 
-st.header("🔍 Factor Descriptions & Danger Zones")
+st.header("🔍 Factor Descriptions & Distributions")
 
 def plot_component(df, col, name, unit, description, is_high_danger=True, bins=100):
     data = df[col].dropna()
@@ -182,37 +174,35 @@ def plot_component(df, col, name, unit, description, is_high_danger=True, bins=1
             "Details": [f"{mean_v:,.2f} {unit}", f"{std_v:,.2f}", f"{zone_sym} {thresh:,.2f}", str(len(danger_zone))]
         }))
 
-    with col2:
+    with c2:
         fig, ax = plt.subplots(figsize=(10, 4))
         counts, bins, patches = ax.hist(data, bins=bins, color='#bdc3c7', alpha=0.8)
         
-        # Color Red for Danger Zone [cite: 257, 285, 343]
         for i in range(len(patches)):
             mid = (bins[i] + bins[i+1]) / 2
             if (is_high_danger and mid > thresh) or (not is_high_danger and mid < thresh):
                 patches[i].set_facecolor('#e74c3c')
         
-        # Scaled Normal Bell Curve
+        # Bell Curve Scaling Fixed
         x = np.linspace(data.min(), data.max(), 500)
         pdf = norm.pdf(x, mean_v, std_v)
         bin_width = bins[1] - bins[0]
-        ax.plot(x, pdf * len(data) * bin_width, color='black', lw=2, label='Normal Distribution')
+        ax.plot(x, pdf * len(data) * bin_width, color='black', lw=2, label='Normal Curve')
         
         ax.axvline(mean_v, color='black', ls='-', label='Mean')
         ax.axvline(thresh, color='#e74c3c', ls='--', lw=2, label='Danger Threshold')
-        ax.set_title(f"Distribution of {name}")
         ax.set_xlabel(f"{name} ({unit})")
         ax.set_ylabel("Frequency")
         ax.legend()
         st.pyplot(fig)
 
-# --- Factor Content ---
-ejsm_desc = "The **Environmental Justice Screening Method (EJSM)** evaluates environmental justice by scoring hazard proximity, health risk, social vulnerability, and climate change vulnerability[cite: 246, 253, 254]."
-income_desc = "**Median Household Income** tracks areas where financial barriers may prevent access to private green space and cooling resources[cite: 275, 277]."
-heat_desc = "**Heat Burden** (Degree Hours per day) measures urban heat island intensity. High-heat areas are prioritized for cooling community gardens[cite: 335, 336]."
-snap_desc = "**SNAP Participation** acts as a proxy for food insecurity, identifying tracts where urban agriculture can provide vital fresh produce access[cite: 280, 281]."
+# Factor Content
+ejsm_desc = "The **Environmental Justice Screening Method (EJSM)** identifies communities facing cumulative impacts from multiple pollution sources and social vulnerabilities."
+income_desc = "**Median Household Income** tracks financial stability. Lower income areas often lack the private funds for high-quality landscaping and community cooling."
+heat_desc = "**Heat Burden** (Degree Hour Days) measures the intensity of the urban heat island effect. High-heat areas are critical targets for garden shade and cooling."
+snap_desc = "**SNAP Participation** acts as a proxy for food insecurity, identifying tracts where urban agriculture can provide vital fresh produce access."
 
-# --- Render Factors ---
+# Render Factors
 plot_component(df_ejsm, 'CIscore', 'Environmental Justice (EJSM)', 'Score', ejsm_desc, is_high_danger=False, bins=20)
 st.divider()
 plot_component(df_income, 'med_hh_income', 'Median HH Income', '$', income_desc, is_high_danger=False, bins=250)
