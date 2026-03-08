@@ -44,25 +44,28 @@ def load_all_data():
     if data_path is None:
         raise FileNotFoundError("Could not find the 'data' folder.")
 
-    # Data Loading
+    # EJSM
     df_ejsm = pd.read_csv(f"{data_path}/EJSM_Origonal.csv")
     df_ejsm.columns = df_ejsm.columns.str.strip()
     df_ejsm['GEOID10'] = df_ejsm['Tract_1'].astype(str).str.split('.').str[0].str.zfill(11)
     df_ejsm['CIscore'] = pd.to_numeric(df_ejsm['CIscore'], errors='coerce')
     df_ejsm = df_ejsm.dropna(subset=['CIscore'])
 
+    # Income
     df_income = pd.read_csv(f"{data_path}/Income_original.csv")
     df_income['med_hh_income'] = df_income['med_hh_income'].astype(str).str.replace('%','').str.replace(',','')
     df_income['med_hh_income'] = pd.to_numeric(df_income['med_hh_income'], errors='coerce')
     df_income = df_income[df_income['med_hh_income'].notna() & (df_income['med_hh_income'] != 0)]
     df_income['GEOID10'] = df_income['tract'].astype(str).str.split('.').str[0].str.zfill(11)
 
-    df_heat = pd.read_csv(f"{data_path}/DegHourDay_Original.csv")
+    # Heat Burden - FILENAME CORRECTED HERE (Added the 's')
+    df_heat = pd.read_csv(f"{data_path}/DegHourDays_Original.csv")
     df_heat.columns = df_heat.columns.str.strip()
     df_heat['DegHourDay'] = pd.to_numeric(df_heat['DegHourDay'], errors='coerce')
     df_heat = df_heat.dropna(subset=['DegHourDay'])
     df_heat['GEOID10'] = df_heat['FIPS'].astype(str).str.split('.').str[0].str.zfill(11)
 
+    # SNAP
     df_snap = pd.read_csv(f"{data_path}/Food_Deserts (1).csv")
     df_snap.columns = df_snap.columns.str.strip()
     df_snap['TractSNAP'] = pd.to_numeric(df_snap['TractSNAP'], errors='coerce')
@@ -71,6 +74,7 @@ def load_all_data():
     df_snap['SNAP_pct'] = (df_snap['TractSNAP'] / df_snap['Pop2010']) * 100
     df_snap['GEOID10'] = df_snap['CT10'].astype(str).str.split('.').str[0].str.zfill(11)
 
+    # Crosswalk
     df_ziptract = pd.read_excel(f"{data_path}/ZIP_TRACT_122025.xlsx", engine='openpyxl')
     df_ziptract['ZIP'] = df_ziptract['ZIP'].astype(str).str.zfill(5)
     df_ziptract['GEOID10'] = df_ziptract['TRACT'].astype(str).str.split('.').str[0].str.zfill(11)
@@ -121,7 +125,7 @@ if not match.empty:
         d = sim_results[:, idx[0]]
         m, s = norm.fit(d)
         
-        # Determine Status
+        # Tier Logic
         if m < 0.15: tier, color, desc = "LOW IMPACT", "#2ecc71", "Area meets healthy baseline metrics."
         elif 0.15 <= m < 0.30: tier, color, desc = "MEDIUM IMPACT", "#f1c40f", "Emerging needs detected."
         elif 0.30 <= m < 0.45: tier, color, desc = "HIGH IMPACT", "#e67e22", "Significant vulnerability. High priority."
@@ -156,40 +160,40 @@ if not match.empty:
 
     st.divider()
 
-    # --- THE CDF CURVE RETURNS ---
-    st.header("🌎 County-Wide Impact Ranking (CDF)")
-    st.write("This shows where your selected neighborhood ranks against all 2,000+ tracts in LA County. Higher on the curve means higher need.")
+    # --- RESTORED CDF CURVE ---
+    st.header("🌎 County-Wide Impact Ranking")
+    st.write("Higher on the curve means higher need relative to all other LA County tracts.")
     
     median_scores = np.median(sim_results, axis=0)
     p25 = np.percentile(sim_results, 25, axis=0)
     p75 = np.percentile(sim_results, 75, axis=0)
     sorted_idx = np.argsort(median_scores)
 
-    fig_reg, ax_reg = plt.subplots(figsize=(12, 4)) 
-    ax_reg.fill_between(range(len(median_scores)), p25[sorted_idx], p75[sorted_idx], alpha=0.2, color='#3498db', label='25th-75th Percentile Range')
+    fig_reg, ax_reg = plt.subplots(figsize=(12, 3.5)) 
+    ax_reg.fill_between(range(len(median_scores)), p25[sorted_idx], p75[sorted_idx], alpha=0.2, color='#3498db', label='County IQR (25-75th)')
     ax_reg.plot(median_scores[sorted_idx], color='#2980b9', lw=2, label='County Median Trendline')
     
-    # Highlight specific ZIP on the curve
+    # Red dot for current ZIP
     if len(idx) > 0:
         local_rank = np.where(sorted_idx == idx[0])[0][0]
         ax_reg.scatter(local_rank, m, color='red', s=100, zorder=5, label=f'ZIP {zip_in} Rank')
-        ax_reg.annotate(f"ZIP {zip_in}", (local_rank, m), textcoords="offset points", xytext=(0,10), ha='center', color='red', weight='bold')
 
-    ax_reg.set_title("LA County Cumulative Need Ranking")
-    ax_reg.set_ylabel("Impact Index (0-1)")
-    ax_reg.set_xlabel("Census Tracts (Ranked from Lowest to Highest Need)")
+    ax_reg.set_title("LA County Cumulative Need Ranking (CDF)")
+    ax_reg.set_ylabel("Impact Index")
+    ax_reg.set_xlabel("Tracts Ranked by Need")
     ax_reg.legend(loc='lower right', fontsize='small')
     st.pyplot(fig_reg)
 
 st.divider()
 
 # ----------------------------
-# 3. Factor Deep-Dive (SD Curve Fit)
+# 3. Factor Deep-Dive (Standard Deviation Curve Fit)
 # ----------------------------
-
 
 st.header("🔍 Factor Distributions & Danger Zones")
 st.write("The **Red Areas** are the 'Danger Zones' (Top 16% of need).")
+
+
 
 def plot_component(df, col, name, unit, description, source_info, is_high_danger=True, bins=100):
     data = df[col].dropna()
@@ -205,7 +209,7 @@ def plot_component(df, col, name, unit, description, source_info, is_high_danger
             "Metric": ["County Mean", "Std Deviation", "Danger Cutoff"], 
             "Value": [f"{mean_v:,.2f}", f"{std_v:,.2f}", f"{thresh:,.2f}"]
         }))
-        st.markdown(f"**Interpretation:** Average LA tract has a {name} of **{mean_v:,.2f}**. Tracts at **{thresh:,.2f}** enter the 'Danger Zone' (Red).")
+        st.markdown(f"**Interpretation:** Once a tract hits **{thresh:,.2f}**, it enters the 'Danger Zone' (Red).")
 
     with c2:
         fig, ax = plt.subplots(figsize=(10, 4))
@@ -224,7 +228,8 @@ def plot_component(df, col, name, unit, description, source_info, is_high_danger
         ax.legend(fontsize='small')
         st.pyplot(fig)
 
-plot_component(df_ejsm, 'CIscore', 'Environmental Justice (EJSM)', 'Score', "Pollution exposure and vulnerability.", "USC/Occidental College (2022)", is_high_danger=False, bins=20)
+# Factors
+plot_component(df_ejsm, 'CIscore', 'Environmental Justice (EJSM)', 'Score', "Pollution and vulnerability.", "USC/Occidental College (2022)", is_high_danger=False, bins=20)
 st.divider()
 plot_component(df_income, 'med_hh_income', 'Median HH Income', 'USD ($)', "Lower income = Higher need.", "U.S. Census Bureau", is_high_danger=False, bins=250)
 st.divider()
