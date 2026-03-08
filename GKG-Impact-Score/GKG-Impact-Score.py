@@ -28,7 +28,7 @@ def load_all_data():
         raise FileNotFoundError("Could not find the 'data' folder in the repository.")
 
     # EJSM (Original)
-    df_ejsm = pd.read_csv(f"{data_path}/EJSM_Origonal.csv")
+    df_ejsm = pd.read_csv(f"{data_path}/EJSM_Original.csv")
     df_ejsm.columns = df_ejsm.columns.str.strip()
     df_ejsm['GEOID10'] = df_ejsm['Tract_1'].astype(str).str.split('.').str[0].str.zfill(11)
     df_ejsm['CIscore'] = pd.to_numeric(df_ejsm['CIscore'], errors='coerce')
@@ -185,3 +185,4 @@ st.divider()
 plot_component(df_heat, 'DegHourDay', 'Heat Burden', 'DegHrDays', is_high_danger=True, bins=150)
 st.divider()
 plot_component(df_snap, 'SNAP_pct', 'Food Access (SNAP %)', '% Pop', is_high_danger=True, bins=150)
+
