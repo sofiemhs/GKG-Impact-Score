@@ -94,14 +94,15 @@ except Exception as e:
 # 2. Main Analytics (10k Monte Carlo)
 # ----------------------------
 
+# ZIP CODE INPUT (Sidebar)
 st.sidebar.header("📍 Location Filter")
-zip_in = st.sidebar.text_input("Enter ZIP Code:", "91505")
+zip_in = st.sidebar.text_input("Enter any ZIP Code:", "91505")
 match = df_ziptract[df_ziptract['ZIP'] == zip_in]
 
 if not match.empty:
     target_geoid = match.iloc[0]['GEOID10']
     
-    # 10,000 Iterations
+    # Run 10,000 Iterations
     x_matrix = df_comb[['s_e','s_i','s_h','s_s']].to_numpy()
     num_iters = 10000 
     weights = np.random.uniform(0, 1, (num_iters, 4))
@@ -109,69 +110,70 @@ if not match.empty:
     
     sim_results = np.dot(weights, x_matrix.T)
     
+    # 1. LOCAL SECTION (TOP)
+    st.header(f"🎯 Local Impact Results: ZIP {zip_in}")
+    idx = np.where(df_comb['GEOID10'].values == target_geoid)[0]
+    
+    if len(idx) > 0:
+        d = sim_results[:, idx[0]]
+        m, s = norm.fit(d)
+        
+        # Big Hero Stat
+        st.metric(label=f"ESTIMATED IMPACT SCORE", value=f"{m:.3f}", delta=f"± {s:.3f} SD")
+
+        col_local_l, col_local_r = st.columns([2, 1])
+        with col_local_l:
+            fig_local, ax_local = plt.subplots(figsize=(10, 5))
+            ax_local.hist(d, bins=30, color='#aed6f1', edgecolor='white', density=True, alpha=0.7)
+            x_fit = np.linspace(min(d), max(d), 100)
+            ax_local.plot(x_fit, norm.pdf(x_fit, m, s), color='#2e86c1', lw=3, label='Normal Fit')
+            ax_local.axvline(m, color='#1b4f72', lw=2, label=f'Mean: {m:.3f}')
+            ax_local.axvline(m + s, color='#e74c3c', ls='--', lw=1.5, label=f'+1 SD')
+            ax_local.axvline(m - s, color='#e74c3c', ls='--', lw=1.5, label=f'-1 SD')
+            ax_local.set_title(f"Impact Distribution for ZIP {zip_in}")
+            ax_local.legend(loc='upper right')
+            st.pyplot(fig_local)
+        
+        with col_local_r:
+            st.write("### Statistical Summary")
+            st.write(f"Based on 10,000 simulated priority weightings, census tract **{target_geoid}** shows the following impact potential:")
+            st.table(pd.DataFrame({
+                "Metric": ["Average Score", "Uncertainty (SD)", "Impact Range"],
+                "Value": [f"{m:.4f}", f"{s:.4f}", f"{m-s:.3f} to {m+s:.3f}"]
+            }))
+    
+    st.divider()
+
+    # 2. REGIONAL SECTION (BOTTOM)
+    st.header("🌎 Regional Context (LA County)")
     median_scores = np.median(sim_results, axis=0)
     p25 = np.percentile(sim_results, 25, axis=0)
     p75 = np.percentile(sim_results, 75, axis=0)
     sorted_idx = np.argsort(median_scores)
-    
-    col_a, col_b = st.columns(2)
-    with col_a:
-        st.subheader("Monte Carlo Simulation of Weighted Index")
-        fig, ax = plt.subplots(figsize=(10, 6))
-        
-        ax.fill_between(range(len(median_scores)), p25[sorted_idx], p75[sorted_idx], 
-                        alpha=0.2, label='25th-75th Percentile', color='#3498db')
-        ax.plot(median_scores[sorted_idx], color='#2980b9', lw=2.5, label='Median')
-        
-        ax.set_ylabel("Weighted Standardized Index")
-        ax.set_xlabel("Census Tracts (Sorted)")
-        ax.grid(True, which='both', linestyle='--', alpha=0.5)
-        
-        textstr = '\n'.join((r'Mean SD = 0.0465', r'Mean SE = 0.000465'))
-        props = dict(boxstyle='round', facecolor='white', alpha=0.5)
-        ax.text(0.05, 0.95, textstr, transform=ax.transAxes, fontsize=10, verticalalignment='top', bbox=props)
-        
-        ax.legend(loc='lower right')
-        st.pyplot(fig)
-        
-    with col_b:
-        st.subheader(f"Local Impact Variability: ZIP {zip_in}")
-        idx = np.where(df_comb['GEOID10'].values == target_geoid)[0]
-        if len(idx) > 0:
-            d = sim_results[:, idx[0]]
-            m, s = norm.fit(d)
-            
-            # THE IMPACT HERO STAT
-            st.metric(label=f"FINAL IMPACT SCORE (ZIP {zip_in})", value=f"{m:.3f}", delta=f"± {s:.3f} SD")
 
-            fig, ax = plt.subplots()
-            # Distribution Histogram
-            counts, bins, patches = ax.hist(d, bins=30, color='#aed6f1', edgecolor='white', density=True, alpha=0.7)
-            
-            # Fitted Normal Curve
-            x_fit = np.linspace(min(d), max(d), 100)
-            ax.plot(x_fit, norm.pdf(x_fit, m, s), color='#2e86c1', lw=3, label='Normal Fit')
-            
-            # SD Indicators
-            ax.axvline(m, color='#1b4f72', lw=2, label=f'Mean: {m:.3f}')
-            ax.axvline(m + s, color='#e74c3c', ls='--', lw=1.5, label=f'+1 SD: {m+s:.3f}')
-            ax.axvline(m - s, color='#e74c3c', ls='--', lw=1.5, label=f'-1 SD: {m-s:.3f}')
-            
-            ax.set_title(f"Simulation Variability for Tract {target_geoid}")
-            ax.set_xlabel("Potential Impact Scores")
-            ax.legend(loc='upper right', fontsize='small')
-            st.pyplot(fig)
-            
-            # Detailed Statistics Table for the Local Tract
-            st.table(pd.DataFrame({
-                "Local Metric": ["Mean Impact Score", "Standard Deviation", "Range (+/- 1 SD)"],
-                "Value": [f"{m:.4f}", f"{s:.4f}", f"{m-s:.3f} to {m+s:.3f}"]
-            }))
+    fig_reg, ax_reg = plt.subplots(figsize=(12, 5))
+    ax_reg.fill_between(range(len(median_scores)), p25[sorted_idx], p75[sorted_idx], 
+                        alpha=0.2, label='25th-75th Percentile', color='#3498db')
+    ax_reg.plot(median_scores[sorted_idx], color='#2980b9', lw=2.5, label='County Median Line')
+    ax_reg.set_ylabel("Weighted Impact Index")
+    ax_reg.set_xlabel("Census Tracts (Ranked Low to High Impact)")
+    ax_reg.grid(True, which='both', linestyle='--', alpha=0.3)
+    
+    # Stats overlay
+    textstr = '\n'.join((r'Mean SD = 0.0465', r'Mean SE = 0.000465'))
+    props = dict(boxstyle='round', facecolor='white', alpha=0.5)
+    ax_reg.text(0.05, 0.95, textstr, transform=ax_reg.transAxes, fontsize=10, verticalalignment='top', bbox=props)
+    
+    ax_reg.legend(loc='lower right')
+    st.pyplot(fig_reg)
+
+else:
+    st.sidebar.error(f"ZIP {zip_in} not found. Please try another LA County ZIP.")
 
 st.divider()
 
 # ----------------------------
-# 3. Deep-Dive Section (KEEPING ALL TABLES SAME)
+# 3. Deep-Dive Section (Unchanged Tables)
 # ----------------------------
 
 st.header("🔍 Factor Descriptions & Distributions")
@@ -180,7 +182,6 @@ def plot_component(df, col, name, unit, description, is_high_danger=True, bins=1
     data = df[col].dropna()
     mean_v, std_v = data.mean(), data.std()
     thresh = mean_v + std_v if is_high_danger else mean_v - std_v
-    
     danger_zone = df[df[col] > thresh] if is_high_danger else df[df[col] < thresh]
     zone_sym = ">" if is_high_danger else "<"
 
@@ -196,7 +197,6 @@ def plot_component(df, col, name, unit, description, is_high_danger=True, bins=1
     with c2:
         fig, ax = plt.subplots(figsize=(10, 4))
         counts, bins, patches = ax.hist(data, bins=bins, color='#bdc3c7', alpha=0.8)
-        
         for i in range(len(patches)):
             mid = (bins[i] + bins[i+1]) / 2
             if (is_high_danger and mid > thresh) or (not is_high_danger and mid < thresh):
@@ -206,7 +206,6 @@ def plot_component(df, col, name, unit, description, is_high_danger=True, bins=1
         pdf = norm.pdf(x, mean_v, std_v)
         bin_width = bins[1] - bins[0]
         ax.plot(x, pdf * len(data) * bin_width, color='black', lw=2, label='Normal Curve')
-        
         ax.axvline(mean_v, color='black', ls='-', label='Mean')
         ax.axvline(thresh, color='#e74c3c', ls='--', lw=2, label='Danger Threshold')
         ax.set_xlabel(f"{name} ({unit})")
@@ -220,7 +219,6 @@ income_desc = "**Median Household Income** tracks financial stability. Lower inc
 heat_desc = "**Heat Burden** (Degree Hour Days) measures the intensity of the urban heat island effect. High-heat areas are critical targets for garden shade and cooling."
 snap_desc = "**SNAP Participation** acts as a proxy for food insecurity, identifying tracts where urban agriculture can provide vital fresh produce access."
 
-# Render Factors
 plot_component(df_ejsm, 'CIscore', 'Environmental Justice (EJSM)', 'Score', ejsm_desc, is_high_danger=False, bins=20)
 st.divider()
 plot_component(df_income, 'med_hh_income', 'Median HH Income', '$', income_desc, is_high_danger=False, bins=250)
