@@ -119,7 +119,6 @@ if not match.empty:
         st.subheader("Monte Carlo Simulation of Weighted Index")
         fig, ax = plt.subplots(figsize=(10, 6))
         
-        # CDF Formatting Fixed
         ax.fill_between(range(len(median_scores)), p25[sorted_idx], p75[sorted_idx], 
                         alpha=0.2, label='25th-75th Percentile', color='#3498db')
         ax.plot(median_scores[sorted_idx], color='#2980b9', lw=2.5, label='Median')
@@ -136,23 +135,43 @@ if not match.empty:
         st.pyplot(fig)
         
     with col_b:
-        st.subheader(f"Local Distribution: ZIP {zip_in}")
+        st.subheader(f"Local Impact Variability: ZIP {zip_in}")
         idx = np.where(df_comb['GEOID10'].values == target_geoid)[0]
         if len(idx) > 0:
             d = sim_results[:, idx[0]]
             m, s = norm.fit(d)
+            
+            # THE IMPACT HERO STAT
+            st.metric(label=f"FINAL IMPACT SCORE (ZIP {zip_in})", value=f"{m:.3f}", delta=f"± {s:.3f} SD")
+
             fig, ax = plt.subplots()
-            ax.hist(d, bins=30, color='#bdc3c7', edgecolor='white', density=True)
-            ax.axvline(m, color='red', lw=2, label=f'Mean Impact: {m:.3f}')
-            ax.set_title(f"Impact Variability for Tract {target_geoid}")
-            ax.legend()
+            # Distribution Histogram
+            counts, bins, patches = ax.hist(d, bins=30, color='#aed6f1', edgecolor='white', density=True, alpha=0.7)
+            
+            # Fitted Normal Curve
+            x_fit = np.linspace(min(d), max(d), 100)
+            ax.plot(x_fit, norm.pdf(x_fit, m, s), color='#2e86c1', lw=3, label='Normal Fit')
+            
+            # SD Indicators
+            ax.axvline(m, color='#1b4f72', lw=2, label=f'Mean: {m:.3f}')
+            ax.axvline(m + s, color='#e74c3c', ls='--', lw=1.5, label=f'+1 SD: {m+s:.3f}')
+            ax.axvline(m - s, color='#e74c3c', ls='--', lw=1.5, label=f'-1 SD: {m-s:.3f}')
+            
+            ax.set_title(f"Simulation Variability for Tract {target_geoid}")
+            ax.set_xlabel("Potential Impact Scores")
+            ax.legend(loc='upper right', fontsize='small')
             st.pyplot(fig)
-            st.success(f"**ZIP {zip_in} Results:** Mean Impact Score is {m:.3f} with a Standard Deviation of {s:.3f}.")
+            
+            # Detailed Statistics Table for the Local Tract
+            st.table(pd.DataFrame({
+                "Local Metric": ["Mean Impact Score", "Standard Deviation", "Range (+/- 1 SD)"],
+                "Value": [f"{m:.4f}", f"{s:.4f}", f"{m-s:.3f} to {m+s:.3f}"]
+            }))
 
 st.divider()
 
 # ----------------------------
-# 3. Deep-Dive Section
+# 3. Deep-Dive Section (KEEPING ALL TABLES SAME)
 # ----------------------------
 
 st.header("🔍 Factor Descriptions & Distributions")
@@ -183,7 +202,6 @@ def plot_component(df, col, name, unit, description, is_high_danger=True, bins=1
             if (is_high_danger and mid > thresh) or (not is_high_danger and mid < thresh):
                 patches[i].set_facecolor('#e74c3c')
         
-        # Bell Curve Scaling Fixed
         x = np.linspace(data.min(), data.max(), 500)
         pdf = norm.pdf(x, mean_v, std_v)
         bin_width = bins[1] - bins[0]
