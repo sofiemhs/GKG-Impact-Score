@@ -17,7 +17,7 @@ with st.expander("📖 Methodology, Standardization & Instructions (Click to Exp
     
     ### **2. How We Standardize the Data**
     To compare different units (like Dollars vs. Heat Degrees), we scale every factor between **0.0 and 1.0**:
-    * **High Value = High Need:** For Heat and SNAP, a higher raw number equals a higher score ($1.0$).
+    * **High Value (1.0) = High Need:** For Heat and SNAP, a higher raw number equals a higher score.
     * **Inverse Scaling:** For Income, a **lower** raw number equals a higher impact score (reflecting higher financial need).
     * **Formula:** $x_{std} = \\frac{x - min(x)}{max(x) - min(x)}$
     
@@ -108,7 +108,7 @@ match = df_ziptract[df_ziptract['ZIP'] == zip_in]
 if not match.empty:
     target_geoid = match.iloc[0]['GEOID10']
     
-    # Run 10,000 simulations
+    # 10k Monte Carlo
     x_matrix = df_comb[['s_e','s_i','s_h','s_s']].to_numpy()
     num_iters = 10000 
     weights = np.random.uniform(0, 1, (num_iters, 4))
@@ -132,7 +132,8 @@ if not match.empty:
             <h1 style="color:white; margin:0;">STREET STATUS: {tier}</h1>
             <p style="color:white; font-size:1.2rem; margin-top:10px;">{desc}</p></div>""", unsafe_allow_html=True)
 
-        st.metric(label="Impact Score (Standardized Mean)", value=f"{m:.3f}", delta=f"± {s:.3f} SD")
+        st.metric(label="Impact Score (The 'Need' Level)", value=f"{m:.3f}", delta=f"± {s:.3f} Variability")
+        st.info(f"**What this number means:** This is the 'Average Need' for ZIP {zip_in}. 0 is perfect, 1 is critical. A score of {m:.3f} suggests this area has a {tier.lower()} priority for conversion.")
 
         col_l, col_r = st.columns([2, 1])
         with col_l:
@@ -141,11 +142,18 @@ if not match.empty:
             x_range = np.linspace(min(d), max(d), 100)
             ax.plot(x_range, norm.pdf(x_range, m, s), color='#2e86c1', lw=3, label='Monte Carlo Fit')
             ax.axvline(m, color='#1b4f72', lw=2, label=f'Mean: {m:.3f}')
-            ax.set_title(f"Simulation Variance for ZIP {zip_in}")
+            ax.set_title(f"Simulation Variance for ZIP {zip_in} (Tract {target_geoid})")
+            ax.set_xlabel("Potential Standardized Impact Score")
             ax.legend(fontsize='small')
             st.pyplot(fig)
         with col_r:
-            st.table(pd.DataFrame({"Metric": ["Avg Score", "Uncertainty (SD)"], "Value": [f"{m:.4f}", f"{s:.4f}"]}))
+            st.markdown("### **Statistical Summary**")
+            st.markdown("*An explanation of the simulation results for this tract:*")
+            st.table(pd.DataFrame({
+                "Metric": ["Avg Score", "Uncertainty (SD)", "Lower Bound (-1 SD)", "Upper Bound (+1 SD)"], 
+                "Value": [f"{m:.4f}", f"{s:.4f}", f"{m-s:.4f}", f"{m+s:.4f}"]
+            }))
+            st.caption("**What are SD Bounds?** Standard Deviation (SD) shows how much the score changes when we prioritize different factors. 68% of all scenarios fall between the Lower and Upper bounds.")
 
     st.divider()
 
@@ -154,6 +162,7 @@ if not match.empty:
 # ----------------------------
 
 st.header("🔍 Factor Distributions & Danger Zones")
+st.write("These graphs show how this specific neighborhood compares to the rest of Los Angeles County. The **Red Areas** are the 'Danger Zones' where the need is most extreme.")
 
 def plot_component(df, col, name, unit, description, source_info, is_high_danger=True, bins=100):
     data = df[col].dropna()
@@ -165,20 +174,21 @@ def plot_component(df, col, name, unit, description, source_info, is_high_danger
         st.subheader(name)
         st.write(description)
         st.caption(f"**Source:** {source_info}")
-        st.table(pd.DataFrame({"Metric": ["Mean", "SD", "Danger Threshold"], "Value": [f"{mean_v:,.2f}", f"{std_v:,.2f}", f"{thresh:,.2f}"]}))
+        st.table(pd.DataFrame({
+            "Metric": ["County Mean", "Std Deviation", "Danger Cutoff"], 
+            "Value": [f"{mean_v:,.2f}", f"{std_v:,.2f}", f"{thresh:,.2f}"]
+        }))
+        st.markdown(f"**Interpretation:** The average tract in LA has a {name} of **{mean_v:,.2f}**. Once a tract hits **{thresh:,.2f}**, it enters the 'Danger Zone' (Red).")
 
     with c2:
         fig, ax = plt.subplots(figsize=(10, 4))
-        # Histogram
         counts, bin_edges, patches = ax.hist(data, bins=bins, color='#bdc3c7', alpha=0.8, density=True)
         
-        # Color the Danger Zone Red
         for i in range(len(patches)):
             mid = (bin_edges[i] + bin_edges[i+1]) / 2
             if (is_high_danger and mid > thresh) or (not is_high_danger and mid < thresh):
                 patches[i].set_facecolor('#e74c3c')
         
-        # ADD THE SD CURVE FIT
         x_axis = np.linspace(data.min(), data.max(), 500)
         ax.plot(x_axis, norm.pdf(x_axis, mean_v, std_v), color='black', lw=2, label='Normal Distribution')
         
@@ -190,11 +200,16 @@ def plot_component(df, col, name, unit, description, source_info, is_high_danger
         ax.legend(fontsize='small')
         st.pyplot(fig)
 
-# Render Factors with SD curves
-plot_component(df_ejsm, 'CIscore', 'Environmental Justice (EJSM)', 'Score', "Pollution and social vulnerability index.", "USC/Occidental College (2022)", is_high_danger=False, bins=20)
+# Sources & Factors
+ejsm_src = "USC & Occidental College Green Zones Program (2022)"
+income_src = "U.S. Census Bureau ACS (2022-2024 Estimates)"
+heat_src = "Safe Clean Water Program (SCWP) LA"
+snap_src = "USDA Food Access Research Atlas"
+
+plot_component(df_ejsm, 'CIscore', 'Environmental Justice (EJSM)', 'Score', "Combines pollution exposure with social vulnerability.", ejsm_src, is_high_danger=False, bins=20)
 st.divider()
-plot_component(df_income, 'med_hh_income', 'Median HH Income', 'USD ($)', "Lower income equals higher need.", "U.S. Census Bureau", is_high_danger=False, bins=250)
+plot_component(df_income, 'med_hh_income', 'Median HH Income', 'USD ($)', "Tracks financial health. High scores are given to lower incomes.", income_src, is_high_danger=False, bins=250)
 st.divider()
-plot_component(df_heat, 'DegHourDay', 'Heat Burden', 'Deg-Hr Days', "Measures urban heat island intensity.", "SCWP LA", is_high_danger=True, bins=150)
+plot_component(df_heat, 'DegHourDay', 'Heat Burden', 'Deg-Hr Days', "Measures the intensity of the Urban Heat Island effect.", heat_src, is_high_danger=True, bins=150)
 st.divider()
-plot_component(df_snap, 'SNAP_pct', 'Food Access (SNAP %)', '% Pop', "Proxy for food insecurity.", "USDA Data", is_high_danger=True, bins=150)
+plot_component(df_snap, 'SNAP_pct', 'Food Access (SNAP %)', '% Pop', "Tracks population receiving food assistance.", snap_src, is_high_danger=True, bins=150)
