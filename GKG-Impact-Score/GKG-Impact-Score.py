@@ -19,7 +19,7 @@ This dashboard identifies high-impact areas for **Good Karma Gardens (GKG)**. We
 @st.cache_data
 def load_and_clean_all_data():
     # 1. Load EJSM (Original)
-    df_ejsm = pd.read_csv("GKG-Impact-Score/data/EJSM_Original.csv")
+    df_ejsm = pd.read_csv("GKG-Impact-Score/data/EJSM_Origonal.csv")
     df_ejsm.columns = df_ejsm.columns.str.strip()
     df_ejsm['GEOID10'] = df_ejsm['Tract_1'].astype(str).str.split('.').str[0].str.zfill(11)
     df_ejsm['CIscore'] = pd.to_numeric(df_ejsm['CIscore'], errors='coerce')
@@ -39,17 +39,20 @@ def load_and_clean_all_data():
     df_heat = df_heat.dropna(subset=['DegHourDay'])
     df_heat['GEOID10'] = df_heat['FIPS'].astype(str).str.split('.').str[0].str.zfill(11)
 
-    # 4. Load SNAP (Original)
-    df_snap = pd.read_csv("GKG-Impact-Score/data/TractSNAP_Original.csv")
+    # 4. Load SNAP / Food Deserts (Original - Updated Path)
+    df_snap = pd.read_csv("GKG-Impact-Score/data/Food_Deserts (1).csv")
     df_snap.columns = df_snap.columns.str.strip()
     df_snap['TractSNAP'] = pd.to_numeric(df_snap['TractSNAP'], errors='coerce')
     df_snap['Pop2010'] = pd.to_numeric(df_snap['Pop2010'], errors='coerce')
-    # Calculate percentage and handle cases with 0 population
-    df_snap = df_snap[(df_snap['Pop2010'] > 0) & (df_snap['TractSNAP'].notna())]
+    
+    # Filter out 0 SNAP and calculate % as per your code
+    df_snap = df_snap[df_snap['TractSNAP'] != 0]
+    df_snap = df_snap.dropna(subset=['TractSNAP', 'Pop2010'])
+    df_snap = df_snap[df_snap['Pop2010'] > 0]
     df_snap['SNAP_pct'] = (df_snap['TractSNAP'] / df_snap['Pop2010']) * 100
     df_snap['GEOID10'] = df_snap['CT10'].astype(str).str.split('.').str[0].str.zfill(11)
 
-    # 5. Load Crosswalk
+    # 5. Load ZIP Crosswalk
     df_ziptract = pd.read_excel("GKG-Impact-Score/data/ZIP_TRACT_122025.xlsx", engine='openpyxl')
     df_ziptract['ZIP'] = df_ziptract['ZIP'].astype(str).str.zfill(5)
     df_ziptract['GEOID10'] = df_ziptract['TRACT'].astype(str).str.split('.').str[0].str.zfill(11)
@@ -104,7 +107,7 @@ yp25 = np.percentile(y, 25, axis=0)
 yp75 = np.percentile(y, 75, axis=0)
 
 # ----------------------------
-# 3. Dashboard Visuals
+# 3. Main Dashboard Visuals
 # ----------------------------
 
 col1, col2 = st.columns(2)
@@ -112,10 +115,11 @@ with col1:
     st.subheader("📊 Regional Impact Ranking & Uncertainty")
     sort_idx = np.argsort(ymed)
     fig1, ax1 = plt.subplots(figsize=(10, 5))
-    ax1.plot(ymed[sort_idx], color='#1b9e77', linewidth=2)
-    ax1.fill_between(range(len(ymed)), yp25[sort_idx], yp75[sort_idx], color='lightskyblue', alpha=0.4)
+    ax1.plot(ymed[sort_idx], color='#1b9e77', linewidth=2, label='Median Score')
+    ax1.fill_between(range(len(ymed)), yp25[sort_idx], yp75[sort_idx], color='lightskyblue', alpha=0.4, label='25th-75th Percentile')
     ax1.set_ylabel("Weighted Impact Score")
     ax1.set_xlabel("Ranked Census Tracts")
+    ax1.legend(loc='upper left')
     st.pyplot(fig1)
 
 with col2:
@@ -129,11 +133,11 @@ with col2:
         xmin, xmax = ax2.get_xlim(); xr = np.linspace(xmin, xmax, 100)
         ax2.plot(xr, norm.pdf(xr, mu, std), 'k', linewidth=2)
         ax2.axvline(mu, color='navy', lw=2); ax2.axvline(mu+std, color='navy', ls='--'); ax2.axvline(mu-std, color='navy', ls='--')
-        ax2.legend([f"Score: {mu:.3f} ± {std:.3f}"], loc='upper right')
+        ax2.legend([f"Score of {zip_used}: {mu:.3f} ± {std:.3f}"], loc='upper right', fontsize=12)
         st.pyplot(fig2)
         st.markdown(f"> ### **Key Finding**\n> Based on simulation, the impact score for ZIP **{zip_used}** is **{mu:.3f} ± {std:.3f}**.")
     else:
-        st.warning("Data incomplete for this tract.")
+        st.warning(f"Data for Tract {target_geoid} is incomplete in the environment datasets.")
 
 st.divider()
 
@@ -142,10 +146,11 @@ st.divider()
 # ----------------------------
 
 st.header("🔍 Component Deep-Dive")
+st.markdown("We isolate each factor to show how 'Danger Zones' were calculated from the raw datasets.")
 
-# Row 1: EJSM & Income
-c_ejsm, c_inc = st.columns(2)
-with c_ejsm:
+# --- Row 1: EJSM & Income ---
+c1l, c1r = st.columns(2)
+with c1l:
     st.subheader("1. Environmental Justice (EJSM)")
     raw = df_ejsm['CIscore'].dropna()
     m, s = raw.mean(), raw.std()
@@ -157,7 +162,7 @@ with c_ejsm:
     st.pyplot(fig)
     st.caption(f"Mean: {m:.2f} | Danger Threshold (<-1 SD): {t:.2f}")
 
-with c_inc:
+with c1r:
     st.subheader("2. Median Household Income")
     raw = df_income['med_hh_income'].dropna()
     m, s = raw.mean(), raw.std()
@@ -169,9 +174,9 @@ with c_inc:
     st.pyplot(fig)
     st.caption(f"Mean: ${m:,.0f} | Danger Threshold (<-1 SD): ${t:,.0f}")
 
-# Row 2: Heat & SNAP
-c_heat, c_snap = st.columns(2)
-with c_heat:
+# --- Row 2: Heat & SNAP ---
+c2l, c2r = st.columns(2)
+with c2l:
     st.subheader("3. Heat Burden (Degree Hour Days)")
     raw = df_heat['DegHourDay'].dropna()
     m, s = raw.mean(), raw.std()
@@ -183,31 +188,20 @@ with c_heat:
     st.pyplot(fig)
     st.caption(f"Mean: {m:.2f} | Danger Threshold (>+1 SD): {t:.2f}")
 
-with c_snap:
+with c2r:
     st.subheader("4. Food Access (SNAP Participation %)")
     raw = df_snap['SNAP_pct'].dropna()
     m, s = raw.mean(), raw.std()
-    t = m + s # HIGH SNAP is the danger zone
-    
-    fig, ax = plt.subplots(figsize=(10, 5))
-    counts, bins, patches = ax.hist(raw, bins=300, color='#9467bd', edgecolor='none', alpha=0.7)
-    
-    # Recolor danger zone (ABOVE threshold)
+    t = m + s
+    fig, ax = plt.subplots(figsize=(10, 5)); counts, bins, patches = ax.hist(raw, bins=300, color='#9467bd', alpha=0.7)
     for i in range(len(patches)):
-        if (bins[i] + bins[i+1])/2 > t:
-            patches[i].set_facecolor("red")
-            
-    # Add Normal Curve
-    x_range = np.linspace(min(raw), max(raw), 500)
-    ax.plot(x_range, norm.pdf(x_range, m, s) * len(raw) * (bins[1]-bins[0]), color='orange', lw=2)
+        if (bins[i] + bins[i+1])/2 > t: patches[i].set_facecolor("red")
+    x_curve = np.linspace(min(raw), max(raw), 500)
+    ax.plot(x_curve, norm.pdf(x_curve, m, s) * len(raw) * (bins[1]-bins[0]), color='orange', lw=2)
     ax.axvline(m, color='black'); ax.axvline(t, color='red', ls='--')
-    
     ax.set_xlabel("% of Population on SNAP")
-    ax.set_ylabel("Frequency")
     st.pyplot(fig)
-    
-    danger_count = len(df_snap[df_snap['SNAP_pct'] > t])
-    st.caption(f"Mean: {m:.2f}% | Danger Threshold (>+1 SD): {t:.2f}% | Tracts in Danger: {danger_count}")
+    st.caption(f"Mean: {m:.2f}% | Danger Threshold (>+1 SD): {t:.2f}%")
 
 st.markdown("""
 ---
@@ -215,4 +209,3 @@ st.markdown("""
 compounded by significant environmental or economic stress. Good Karma Gardens targets these specific 
 red-bin tracts to maximize community impact.
 """)
-
