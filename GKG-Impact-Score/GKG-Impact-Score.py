@@ -19,7 +19,7 @@ This dashboard identifies high-impact areas for **Good Karma Gardens (GKG)**. We
 @st.cache_data
 def load_and_clean_all_data():
     # 1. Load EJSM (Original)
-    df_ejsm = pd.read_csv("GKG-Impact-Score/data/EJSM_Origonal.csv")
+    df_ejsm = pd.read_csv("GKG-Impact-Score/data/EJSM_Original.csv")
     df_ejsm.columns = df_ejsm.columns.str.strip()
     df_ejsm['GEOID10'] = df_ejsm['Tract_1'].astype(str).str.split('.').str[0].str.zfill(11)
     df_ejsm['CIscore'] = pd.to_numeric(df_ejsm['CIscore'], errors='coerce')
@@ -215,3 +215,4 @@ st.markdown("""
 compounded by significant environmental or economic stress. Good Karma Gardens targets these specific 
 red-bin tracts to maximize community impact.
 """)
+
