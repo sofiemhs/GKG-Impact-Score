@@ -29,15 +29,24 @@ with st.expander("📖 Methodology, Data Sources & Years"):
     ### **Impact Score Equation**
     The total **Impact Score (0.0 - 4.0)** is the sum of these four pillars. The final score is the cumulative sum of the standardized scores ($s$) across all four pillars:
     
-    $$Impact Score = s_{EJSM} + s_{Economic} + s_{Heat} + s_{Food}$$
+    $$Impact Score = s_{e} + s_{i} + s_{h} + s_{s}$$
     
-    **Weighting:** Currently, all pillars are weighted equally. If you wish to weight a specific pillar more heavily (e.g., prioritizing Heat Burden over Income), you can adjust this in the Python script. Navigate to **SECTION 2: LOCAL ANALYSIS** and modify the `actual_score` calculation by multiplying the specific pillar by a coefficient (e.g., `raw_scores['s_h'] * 1.5`).
+    **Weighting:** Currently, all pillars are weighted equally (multiplied by 1.0). If you wish to prioritize one pillar over others, navigate to the code and look for the **# --- CUSTOM WEIGHTING ADJUSTMENT ---** section. You can multiply the specific variable by a custom weight. 
+    
+    **Variable Key for Weighting:**
+    * `s_e` = Environmental Justice (EJSM)
+    * `s_i` = Economic Need (Income)
+    * `s_h` = Heat Burden (Temperature)
+    * `s_s` = Food Access (SNAP)
 
-    ### **Impact Ranges**
-    - <span style="color:#2ecc71; font-weight:bold;">0.0 - 0.8 (Low Impact):</span> Healthy baseline; resilience is present.
-    - <span style="color:#f1c40f; font-weight:bold;">0.8 - 1.6 (Medium Impact):</span> Emerging needs; localized vulnerabilities detected.
-    - <span style="color:#e67e22; font-weight:bold;">1.6 - 2.4 (High Impact):</span> Significant need; multi-factor vulnerabilities present.
-    - <span style="color:#e74c3c; font-weight:bold;">2.4 - 4.0 (Extreme Impact):</span> **Danger Zone**; critical intersection of pollution, poverty, and climate risk.
+    *Example: To make Heat Burden twice as important as the others, change the code to: `(raw_scores['s_h'] * 2.0) + raw_scores['s_e'] + raw_scores['s_i'] + raw_scores['s_s']`.*
+
+    ### **Impact Ranges & Severity Logic**
+    The ranges are designed to reflect how community needs **compound**. 
+    - <span style="color:#2ecc71; font-weight:bold;">0.0 - 0.8 (Low Impact):</span> **Stable Baseline.** These areas usually only face one minor issue or none at all. The narrow range reflects a high degree of community resilience.
+    - <span style="color:#f1c40f; font-weight:bold;">0.8 - 1.6 (Medium Impact):</span> **Emerging Vulnerability.** At this level, at least one pillar is showing significant stress, or two are showing moderate stress.
+    - <span style="color:#e67e22; font-weight:bold;">1.6 - 2.4 (High Impact):</span> **Multi-Factor Need.** This range indicates that at least two pillars are in a "Danger Zone." The community is struggling on multiple fronts simultaneously.
+    - <span style="color:#e74c3c; font-weight:bold;">2.4 - 4.0 (Extreme Impact):</span> **The Danger Zone.** This range is much wider because it accounts for **Systemic Compounding.** When a community scores high across three or four pillars (Pollution + Poverty + Heat + Food Insecurity), the crises don't just add up—they multiply. This wide "bucket" captures the most critical areas in LA where every single intervention is life-changing.
     """, unsafe_allow_html=True)
 
 # ----------------------------
@@ -140,8 +149,8 @@ if missing_info_count >= 3:
     st.stop()
 
 # --- CUSTOM WEIGHTING ADJUSTMENT ---
-# To adjust weights, multiply the score keys below by your desired factor 
-# Example: (raw_scores['s_h'] * 1.5)
+# variables: s_e (EJSM), s_i (Income), s_h (Heat), s_s (SNAP)
+# To weight a pillar, multiply the specific variable below by your desired factor.
 actual_score = raw_scores.sum() 
 
 # Monte Carlo: 10,000 simulations
