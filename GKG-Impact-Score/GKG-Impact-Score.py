@@ -31,16 +31,15 @@ with st.expander("📖 Methodology, Data Sources & Years"):
     
     $$Impact Score = s_{e} + s_{i} + s_{h} + s_{s}$$
     
-    **Weighting:** Currently, all pillars are weighted equally. If you wish to prioritize one pillar over others (e.g., placing more importance on Food Access), you must adjust this manually in the Python script. 
-    
-    Please navigate to **SECTION 2: LOCAL ANALYSIS** within the code and look for the header **# --- CUSTOM WEIGHTING ADJUSTMENT ---** for instructions and examples on how to modify these values.
+    **Weighting:** Currently, all pillars are weighted equally. If you wish to prioritize one pillar over others (e.g., placing more importance on Food Access), you must adjust this manually in the Python script. (Navigate to **SECTION 2: LOCAL ANALYSIS** within the code and refer to header "Custom Weighing Adjustment" for instructions and examples on how to modify these values.)
 
     ### **Impact Ranges & Severity Logic**
-    The ranges are designed to reflect how community needs **compound**. 
-    - <span style="color:#2ecc71; font-weight:bold;">0.0 - 0.8 (Low Impact):</span> **Stable Baseline.** These areas usually only face one minor issue or none at all. The narrow range reflects a high degree of community resilience.
-    - <span style="color:#f1c40f; font-weight:bold;">0.8 - 1.6 (Medium Impact):</span> **Emerging Vulnerability.** At this level, at least one pillar is showing significant stress, or two are showing moderate stress.
-    - <span style="color:#e67e22; font-weight:bold;">1.6 - 2.4 (High Impact):</span> **Multi-Factor Need.** This range indicates that at least two pillars are in a "Danger Zone." The community is struggling on multiple fronts simultaneously.
-    - <span style="color:#e74c3c; font-weight:bold;">2.4 - 4.0 (Extreme Impact):</span> **The Danger Zone.** This range is much wider because it accounts for **Systemic Compounding.** When a community scores high across three or four pillars (Pollution + Median Household Income + Heat + Food Insecurity), the crises don't just add up—they multiply. This wide "bucket" captures the most critical areas in LA where every single intervention is life-changing.
+    The following ranges represent the total potential need of a community. Because these four pillars often overlap, we assume that as the score increases, the community is experiencing **Systemic Compounding**—where multiple environmental and social stressors intersect to create a significantly higher state of vulnerability than a single factor alone.
+
+    - <span style="color:#2ecc71; font-weight:bold;">0.0 - 0.8 (Low Impact):</span> Assumes 0% to 20% of total potential need.
+    - <span style="color:#f1c40f; font-weight:bold;">0.8 - 1.6 (Medium Impact):</span> Assumes 20% to 40% of total potential need.
+    - <span style="color:#e67e22; font-weight:bold;">1.6 - 2.4 (High Impact):</span> Assumes 40% to 60% of total potential need.
+    - <span style="color:#e74c3c; font-weight:bold;">2.4 - 4.0 (Extreme Impact):</span> Assumes 60% to 100% of total potential need.
     """, unsafe_allow_html=True)
 
 # ----------------------------
@@ -142,7 +141,7 @@ if missing_info_count >= 3:
     st.error(ERROR_MSG)
     st.stop()
 
-# --- CUSTOM WEIGHTING ADJUSTMENT ---
+# --- CUSTOM WEIGHING ADJUSTMENT ---
 # Variable Key for Weighting:
 # s_e = Environmental Justice (EJSM)
 # s_i = Median Household Income
@@ -151,6 +150,9 @@ if missing_info_count >= 3:
 #
 # HOW TO WEIGHT: 
 # To weight a pillar, multiply its specific variable below by your desired factor.
+#
+# Example 1: To have each pillar weighted equally 
+# actual_score = raw_scores['s_s']  + raw_scores['s_e'] + raw_scores['s_i'] + raw_scores['s_h']
 # 
 # Example 1: To make Food Access (SNAP) twice as important as everything else:
 # actual_score = (raw_scores['s_s'] * 2.0) + raw_scores['s_e'] + raw_scores['s_i'] + raw_scores['s_h']
@@ -161,7 +163,7 @@ if missing_info_count >= 3:
 # Example 3: Original Heat Burden example (Heat twice as important):
 # actual_score = (raw_scores['s_h'] * 2.0) + raw_scores['s_e'] + raw_scores['s_i'] + raw_scores['s_s']
 
-actual_score = raw_scores.sum() 
+actual_score = raw_scores['s_s'] + raw_scores['s_e'] + raw_scores['s_i'] + raw_scores['s_h']
 
 # Monte Carlo: 10,000 simulations
 x_matrix = df_comb[['s_e', 's_i', 's_h', 's_s']].to_numpy()
