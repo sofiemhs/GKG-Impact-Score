@@ -23,10 +23,10 @@ with st.expander("📖 How the Math Works (For Outsiders)"):
     st.info("**Range:** 0.0 (Low Need) to 4.0 (Maximum Need).")
     
     st.write("### 3. Sensitivity (Monte Carlo)")
-    st.write("We run 10,000 simulations where we randomly 'weight' different factors. This tells us if a ZIP code is high-need regardless of whether you care more about Heat or Food Access.")
+    st.write("We run 10,000 simulations where we randomly 'weight' different factors. This ensures our 'Street Status' is robust even if priorities change.")
 
 # ----------------------------
-# Data Loading (Unchanged logic, corrected filename)
+# 1. Data Loading & Processing
 # ----------------------------
 
 @st.cache_data
@@ -41,6 +41,7 @@ def load_all_data():
     if data_path is None:
         raise FileNotFoundError("Could not find the 'data' folder.")
 
+    # Data Loading
     df_ejsm = pd.read_csv(f"{data_path}/EJSM_Origonal.csv")
     df_ejsm.columns = df_ejsm.columns.str.strip()
     df_ejsm['GEOID10'] = df_ejsm['Tract_1'].astype(str).str.split('.').str[0].str.zfill(11)
@@ -93,7 +94,7 @@ except Exception as e:
     st.stop()
 
 # ----------------------------
-# SECTION 2: LOCAL ANALYSIS
+# 2. LOCAL ANALYSIS (0.0 - 4.0 SCALE)
 # ----------------------------
 
 st.sidebar.header("📍 Set Location")
@@ -108,26 +109,26 @@ target_geoid = match.iloc[0]['GEOID10']
 idx = np.where(df_comb['GEOID10'].values == target_geoid)[0]
 
 if len(idx) > 0:
-    # Calculation: Sum of factors (0-4 scale)
+    # Scale Calculation: 0-4
     raw_pillar_scores = df_comb.iloc[idx[0]][['s_e','s_i','s_h','s_s']]
     actual_score = raw_pillar_scores.sum()
     
-    # Monte Carlo Sensitivity (multiplied by 4 to stay on 0-4 scale)
+    # Monte Carlo Sensitivity (Scaled to 0-4)
     x_matrix = df_comb[['s_e','s_i','s_h','s_s']].to_numpy()
     weights = np.random.uniform(0, 1, (10000, 4))
     weights /= weights.sum(axis=1, keepdims=True)
-    sim_results = np.dot(weights, x_matrix.T) * 4  # Scaled to 0-4
+    sim_results = np.dot(weights, x_matrix.T) * 4 
     
     d = sim_results[:, idx[0]]
     m, s = norm.fit(d)
     
     # Identify Primary Driver (30% of Total Score)
     labels = {'s_e': 'EJSM', 's_i': 'Economic Need', 's_h': 'Heat', 's_s': 'Food Access'}
-    drivers = [labels[k] for k, v in (raw_pillar_scores / actual_score).items() if v >= 0.30]
+    drivers = [labels[k] for k, v in (raw_pillar_scores / actual_score).items() if v >= 0.30] if actual_score > 0 else []
     driver_text = f" & driven by **{', '.join(drivers)}**" if drivers else ""
 
-    # Updated Tiers for 0-4 Scale
-    if actual_score < 0.8: tier, color, desc = "LOW IMPACT", "#2ecc71", "Area meets healthy baseline metrics."
+    # Tiers for 0-4 Scale
+    if actual_score < 0.8: tier, color, desc = "LOW IMPACT", "#2ecc71", "Healthy baseline metrics."
     elif 0.8 <= actual_score < 1.6: tier, color, desc = "MEDIUM IMPACT", "#f1c40f", "Emerging needs detected."
     elif 1.6 <= actual_score < 2.4: tier, color, desc = "HIGH IMPACT", "#e67e22", "Significant vulnerability."
     else: tier, color, desc = "VERY HIGH IMPACT", "#e74c3c", "DANGER ZONE: Critical priority."
@@ -137,7 +138,6 @@ if len(idx) > 0:
         <p style="color:white; font-size:1.4rem; margin-top:5px; font-weight:bold;">{desc}{driver_text}</p></div>""", unsafe_allow_html=True)
 
     st.header(f"📊 Impact Sensitivity for {zip_in}")
-    st.write("Even if we change the importance of each factor, where does the score land?")
     
     col_l, col_r = st.columns([2, 1])
     with col_l:
@@ -145,10 +145,10 @@ if len(idx) > 0:
         ax.hist(d, bins=30, color='#aed6f1', density=True, alpha=0.7, label='Simulation Distribution')
         x_range = np.linspace(min(d), max(d), 100)
         ax.plot(x_range, norm.pdf(x_range, m, s), color='#2e86c1', lw=3, label='Normal Curve Fit')
-        ax.axvline(actual_score, color='#1b4f72', lw=3, label=f'Actual Score: {actual_score:.2f}')
-        ax.axvline(actual_score-s, color='#e74c3c', ls='--', label='-1 SD')
-        ax.axvline(actual_score+s, color='#e74c3c', ls='--', label='+1 SD')
-        ax.set_xlabel("Impact Score (Scale 0-4)")
+        ax.axvline(actual_score, color='#1b4f72', lw=3, label=f'Current ZIP: {actual_score:.2f}')
+        ax.axvline(actual_score-s, color='#e74c3c', ls='--', label='-1 SD Bounds')
+        ax.axvline(actual_score+s, color='#e74c3c', ls='--', label='+1 SD Bounds')
+        ax.set_xlabel("Potential Total Impact Score (0.0 - 4.0)")
         ax.legend(fontsize='x-small')
         st.pyplot(fig)
     with col_r:
@@ -156,11 +156,13 @@ if len(idx) > 0:
         st.metric("Total Impact Score", f"{actual_score:.3f} / 4.0")
         st.table(pd.DataFrame({
             "Standard Deviation": [f"{s:.4f}"],
-            "High-Confidence Range": [f"{actual_score-s:.2f} to {actual_score+s:.2f}"]
+            "Confidence Range": [f"{actual_score-s:.2f} to {actual_score+s:.2f}"]
         }))
-        st.caption("A small Standard Deviation (SD) means the score is very stable regardless of priorities.")
+        st.caption("A small SD means the result is stable even if we prioritize different factors.")
 
-# --- SECTION 3: COUNTY-WIDE RANKING (CDF) ---
+# ----------------------------
+# 3. COUNTY-WIDE RANKING (CDF)
+# ----------------------------
 st.divider()
 st.header("🌎 Where does this ZIP rank in LA County?")
 st.write("We ranked all 2,000+ census tracts in LA from lowest need to highest need.")
@@ -172,22 +174,33 @@ percentile = (all_tract_sums < actual_score).mean() * 100
 fig_cdf, ax_cdf = plt.subplots(figsize=(12, 3))
 ax_cdf.plot(sorted_sums, color='#2980b9', lw=3, label='LA County Need Curve')
 ax_cdf.fill_between(range(len(sorted_sums)), sorted_sums, alpha=0.1, color='#3498db')
-ax_cdf.scatter(np.where(all_tract_sums[np.argsort(all_tract_sums)] >= actual_score)[0][0], actual_score, color='red', s=100, zorder=5)
-ax_cdf.set_title("Cumulative Distribution of Need")
+# Red dot placement
+rank_idx = np.searchsorted(sorted_sums, actual_score)
+ax_cdf.scatter(rank_idx, actual_score, color='red', s=100, zorder=5, label=f'ZIP {zip_in} Rank')
+ax_cdf.set_title("Cumulative Distribution of Need (CDF)")
 ax_cdf.set_ylabel("Impact Score (0-4)")
 ax_cdf.set_xlabel("Tracts (Ranked Lowest to Highest)")
+ax_cdf.legend()
 st.pyplot(fig_cdf)
-st.success(f"**Ranking:** ZIP {zip_in} has a higher need than **{percentile:.1f}%** of LA County.")
+st.success(f"**Ranking Result:** ZIP {zip_in} has a higher need than **{percentile:.1f}%** of LA County.")
 
 
 
-# --- SECTION 4: THE FOUR PILLARS ---
+# ----------------------------
+# 4. THE FOUR PILLARS (DEEP DIVE)
+# ----------------------------
 st.divider()
 st.header("🔍 The Driving Factors")
 st.write("Below is the 'Raw Data' for each pillar compared to the rest of the county.")
 
 def plot_pillar(df, col, name, unit, desc, score_key, bins, is_high_danger=True):
-    local_val = df[df['GEOID10'] == target_geoid][col].values[0]
+    # SAFETY FIX: Check if ZIP exists in this specific pillar
+    subset = df[df['GEOID10'] == target_geoid]
+    if subset.empty:
+        st.warning(f"⚠️ No local {name} data available for this specific tract.")
+        return
+
+    local_val = subset[col].values[0]
     data = df[col].dropna()
     mean_v, std_v = data.mean(), data.std()
     thresh = mean_v + std_v if is_high_danger else mean_v - std_v
@@ -198,7 +211,7 @@ def plot_pillar(df, col, name, unit, desc, score_key, bins, is_high_danger=True)
         st.subheader(name)
         st.write(desc)
         st.metric(f"ZIP {zip_in} Value", f"{local_val:,.1f} {unit}")
-        st.write(f"**Pillar Weight:** {weight:.3f} points toward the 4.0 total.")
+        st.write(f"**Pillar Weight:** {weight:.3f} pts")
     with c2:
         fig, ax = plt.subplots(figsize=(10, 3.5))
         counts, bin_edges, patches = ax.hist(data, bins=bins, color='#bdc3c7', alpha=0.7, density=True)
@@ -207,12 +220,14 @@ def plot_pillar(df, col, name, unit, desc, score_key, bins, is_high_danger=True)
             if (is_high_danger and mid > thresh) or (not is_high_danger and mid < thresh):
                 patches[i].set_facecolor('#e74c3c')
         
+        # Curve and Markers
         x = np.linspace(data.min(), data.max(), 500)
-        ax.plot(x, norm.pdf(x, mean_v, std_v), color='black', lw=2)
+        ax.plot(x, norm.pdf(x, mean_v, std_v), color='black', lw=2, label='Normal Dist.')
         ax.axvline(local_val, color='blue', lw=3, label=f'ZIP {zip_in}')
-        ax.axvline(mean_v, color='black', label='County Mean')
+        ax.axvline(mean_v, color='black', lw=1.5, label='County Mean')
         ax.axvline(mean_v - std_v, color='gray', ls=':', label='-1 SD')
         ax.axvline(mean_v + std_v, color='gray', ls=':', label='+1 SD')
+        ax.set_title(f"{name} Distribution")
         ax.legend(fontsize='xx-small', ncol=2)
         st.pyplot(fig)
 
