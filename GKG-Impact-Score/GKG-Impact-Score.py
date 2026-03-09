@@ -8,20 +8,19 @@ import os
 st.set_page_config(layout="wide", page_title="GKG Impact Dashboard")
 
 # --- SECTION 1: MISSION & PILLAR LOGIC ---
-# (1) Title Change
 st.title("🌿 Good Karma Gardens: Impact Score Analysis")
 
-# (2) Detailed Methodology Dropdown
+# (1, 2, 3, 8) Detailed Methodology with Links and specific text
 with st.expander("📖 Methodology, Data Sources & Years"):
     st.markdown("""
     ### **The Question We Are Answering**
-    *"Where in Los Angeles County can a lawn-to-garden conversion provide the most significant uplift for climate resilience, public health, and economic equity?"*
+    "What impact are Good Karma Gardens work converting space into gardens having based on location?"
 
     ### **Why Each Pillar Matters**
-    1. **Environmental Justice (EJSM):** Identifies areas where residents face cumulative burdens from pollution (air, water, toxic waste) combined with biological vulnerabilities.
-    2. **Economic Need:** Measures the financial capacity of a neighborhood. Lower-income areas often lack the resources for private greening, making community-led gardens a critical resource.
-    3. **Heat Burden:** Targets 'Urban Heat Islands' where lack of canopy cover causes dangerously high temperatures. Gardens actively cool these areas through transpiration.
-    4. **Food Access (SNAP):** Pinpoints 'food deserts' where affordable, fresh produce is scarce. Gardens here serve as decentralized grocery stores.
+    * **[Environmental Justice (EJSM)](#environmental-justice-ejsm):** Communities will low Enviromental Justice score are at a higher need for increased green space
+    * **[Economic Need](#economic-need):** Low Income communities are often overlooked and underserved for publically accessable green spaces
+    * **[Heat Burden](#heat-burden):** Urban heat is a result of lack of canopy cover and can causes dangerously high temperatures, yet gardens can limit this effect by actively cooling these areas through transpiration.
+    * **[Food Access (SNAP)](#food-access-snap):** Pinpoints 'food deserts' where affordable, fresh produce is scarce. Good karma Garden's work can help to aliviate this burden.
 
     ### **Standardization Logic**
     Every raw data point (dollars, degrees, or percentages) is standardized on a scale of **0.0 to 1.0**. 
@@ -30,23 +29,14 @@ with st.expander("📖 Methodology, Data Sources & Years"):
     * The total **Impact Score (0.0 - 4.0)** is the sum of these four pillars.
 
     ### **Impact Ranges**
-    - **0.0 - 0.8 (Low Impact):** Healthy baseline; baseline resilience present.
-    - **0.8 - 1.6 (Medium Impact):** Emerging needs; localized vulnerabilities detected.
-    - **1.6 - 2.4 (High Impact):** Significant need; multi-factor vulnerabilities present.
-    - **2.4 - 4.0 (Extreme Impact):** **Danger Zone**; critical intersection of pollution, poverty, and climate risk.
-    """)
-    
-    st.markdown("""
-    | Pillar | Source | Year | Range (Danger Threshold) |
-    | :--- | :--- | :--- | :--- |
-    | **Env. Justice** | SCAG / CalEnviroScreen | 2022 | > 1 Standard Deviation from Mean |
-    | **Economic Need** | ACS 5-Year Estimates | 2021 | Inverted (Lower income = Higher Score) |
-    | **Heat Burden** | NOAA / Urban Heat Watch | 2022 | > 1 Standard Deviation from Mean |
-    | **Food Access** | USDA Food Research Atlas | 2019 | > 1 Standard Deviation from Mean |
-    """)
+    - <span style="color:#2ecc71; font-weight:bold;">0.0 - 0.8 (Low Impact):</span> Healthy baseline; baseline resilience present.
+    - <span style="color:#f1c40f; font-weight:bold;">0.8 - 1.6 (Medium Impact):</span> Emerging needs; localized vulnerabilities detected.
+    - <span style="color:#e67e22; font-weight:bold;">1.6 - 2.4 (High Impact):</span> Significant need; multi-factor vulnerabilities present.
+    - <span style="color:#e74c3c; font-weight:bold;">2.4 - 4.0 (Extreme Impact):</span> **Danger Zone**; critical intersection of pollution, poverty, and climate risk.
+    """, unsafe_allow_html=True)
 
 # ----------------------------
-# 1. Data Loading & Standardizing
+# 1. Data Loading 
 # ----------------------------
 
 @st.cache_data
@@ -122,59 +112,69 @@ idx_row = df_comb[df_comb['GEOID10'] == target_geoid].index[0]
 raw_scores = df_comb.iloc[idx_row][['s_e','s_i','s_h','s_s']]
 actual_score = raw_scores.sum()
 
-# Monte Carlo (Local)
+# (5) Monte Carlo: 10,000 simulations
 x_matrix = df_comb[['s_e','s_i','s_h','s_s']].to_numpy()
-sim_weights = np.random.uniform(0, 1, (1000, 4))
+sim_weights = np.random.uniform(0, 1, (10000, 4))
 sim_weights /= sim_weights.sum(axis=1, keepdims=True)
 sim_results = np.dot(sim_weights, x_matrix.T) 
 local_sims = sim_results[:, idx_row] * 4
 m_loc, s_loc = norm.fit(local_sims)
 
-# (3) Change Title
+# (4) Color coding logic for Impact Ranges
+if actual_score < 0.8: tier, color = "LOW IMPACT", "#2ecc71"
+elif 0.8 <= actual_score < 1.6: tier, color = "MEDIUM IMPACT", "#f1c40f"
+elif 1.6 <= actual_score < 2.4: tier, color = "HIGH IMPACT", "#e67e22"
+else: tier, color = "EXTREME IMPACT (DANGER ZONE)", "#e74c3c"
+
 st.header("📊 Impact Score Approximation")
 
-# (4) Clearly and largely display the Impact Score
-st.markdown("### **Calculated Impact Score**")
+# (4) Display Range and Color in the box
 st.markdown(f"""
-<div style="background-color:#f8f9fa; padding:10px; border-radius:10px; border-left: 10px solid #2e86c1; margin-bottom:20px;">
-    <h1 style="color:#1b4f72; font-size:4rem; margin:0;">{m_loc:.2f} <span style="font-size:1.5rem;">± {s_loc:.3f}</span></h1>
-    <p style="color:#2e86c1; font-weight:bold; margin:0;">Estimated resilience ROI based on local sensitivity simulation.</p>
+<div style="background-color:{color}; padding:20px; border-radius:15px; border: 2px solid rgba(0,0,0,0.1); margin-bottom:20px; text-align:center;">
+    <p style="color:white; font-size:1.2rem; margin:0; font-weight:bold; text-transform:uppercase;">{tier}</p>
+    <h1 style="color:white; font-size:5rem; margin:0; line-height:1;">{m_loc:.2f} <span style="font-size:1.5rem;">± {s_loc:.3f}</span></h1>
+    <p style="color:white; font-weight:bold; margin-top:10px;">Calculated Impact Score for ZIP {zip_in}</p>
 </div>
 """, unsafe_allow_html=True)
 
 col_l, col_r = st.columns([2, 1])
 with col_l:
     fig_sim, ax_sim = plt.subplots(figsize=(10, 4))
-    ax_sim.hist(local_sims, bins=30, color='#aed6f1', density=True, alpha=0.7)
+    ax_sim.hist(local_sims, bins=50, color='#aed6f1', density=True, alpha=0.7)
     x_range = np.linspace(min(local_sims), max(local_sims), 100)
     ax_sim.plot(x_range, norm.pdf(x_range, m_loc, s_loc), color='#2e86c1', lw=3)
     ax_sim.axvline(actual_score, color='#1b4f72', lw=3, label=f'Raw Calculation: {actual_score:.2f}')
-    ax_sim.set_title(f"Score Variance Simulation for {zip_in}")
+    
+    # (7) Dotted lines for Confidence bounds
+    ax_sim.axvline(actual_score - s_loc, color='#e74c3c', ls=':', lw=2, label='Confidence Lower Bound')
+    ax_sim.axvline(actual_score + s_loc, color='#e74c3c', ls=':', lw=2, label='Confidence Upper Bound')
+    
+    ax_sim.set_title(f"Score Variance Simulation for {zip_in} (10,000 Iterations)")
     ax_sim.legend(fontsize='x-small')
     st.pyplot(fig_sim)
 
 with col_r:
-    # (5) Explanation of Approximation
-    st.subheader("What this shows:")
-    st.markdown("""
-    This histogram represents **1,000 simulations** of your local data. We vary the importance (weights) of the four pillars to see how stable your score is. 
+    st.subheader("Statistical Interpretation")
+    # (5, 7) Explanation of Approximation and lines
+    st.markdown(f"""
+    This graph analyzes the stability of the impact score using **10,000 simulations**. By randomly shifting the priority of our four pillars, we determine how certain we are about the final score. 
     
-    - **Simulation Mean:** The most likely impact score for this area.
-    - **Volatility (SD):** Shows how much the score changes if we prioritize one pillar over another.
-    - **Bounds:** The range where the score falls 68% of the time.
+    - **Blue Line:** The theoretical distribution of scores.
+    - **Dotted Red Lines:** Represent the Confidence Interval. **The closer these lines are to the mean, the more certain we are of the data's precision in this location.**
+    - **Standard Deviation:** A measure of "spread." A small number means the score is consistent across different weighting scenarios.
     """)
+    # (6) Removed Simulated Mean
     st.table(pd.DataFrame({
-        "Metric": ["Calculated Score", "Simulated Mean", "Standard Deviation", "Confidence Lower", "Confidence Upper"],
-        "Value": [f"{actual_score:.3f}", f"{m_loc:.3f}", f"{s_loc:.3f}", f"{actual_score-s_loc:.2f}", f"{actual_score+s_loc:.2f}"]
+        "Metric": ["Calculated Score", "Standard Deviation (Volatility)"],
+        "Value": [f"{actual_score:.3f}", f"{s_loc:.3f}"]
     }))
 
 # ----------------------------
-# 3. COUNTY CONTEXT (FIXED CDF)
+# 3. COUNTY CONTEXT (CDF)
 # ----------------------------
 st.divider()
 st.header("🌎 County-Wide Impact Ranking")
 
-# (6) Explain Plot
 st.markdown("""
 This plot ranks every single Census Tract in Los Angeles County from **Lowest Need (Left)** to **Highest Need (Right)**.
 The blue shaded area represents the 'Average' middle 50% of the county. Areas to the far right are the priority zones for Good Karma Gardens.
@@ -189,7 +189,6 @@ fig_cdf, ax_cdf = plt.subplots(figsize=(12, 5))
 ax_cdf.plot(medians[sort_idx], color='#1f77b4', lw=2.5, label='LA County Median Curve')
 ax_cdf.fill_between(range(len(medians)), p25[sort_idx], p75[sort_idx], color='#1f77b4', alpha=0.2, label='25th-75th Percentile')
 
-# (7) Add dot for local ZIP
 rank_pos = np.searchsorted(medians[sort_idx], medians[idx_row])
 ax_cdf.scatter(rank_pos, medians[idx_row], color='red', s=200, zorder=10, label=f'ZIP {zip_in} Rank', edgecolor='white')
 
@@ -199,7 +198,6 @@ ax_cdf.set_xlabel("Census Tracts (Sorted by Need)")
 ax_cdf.legend(loc='lower right')
 st.pyplot(fig_cdf)
 
-# (8) Placement Message
 percentile = (medians < medians[idx_row]).mean() * 100
 if percentile > 75:
     st.warning(f"📍 **ZIP {zip_in}** is in the top **{100-percentile:.1f}%** of high-need areas in the county. It is significantly higher than most of LA.")
@@ -214,8 +212,11 @@ else:
 st.divider()
 st.header("🔍 Pillar Deep-Dive")
 
-def plot_pillar(df, col, name, unit, desc, score_key, bins, is_high_danger=True, source=""):
+def plot_pillar(df, col, name, unit, desc, score_key, bins, is_high_danger=True, source="", anchor_id=""):
+    # (8) Create anchor for linking
+    st.markdown(f'<div id="{anchor_id}"></div>', unsafe_allow_html=True)
     sub = df[df['GEOID10'] == target_geoid]
+    
     if sub.empty:
         st.warning(f"⚠️ **DATA MISSING:** No local reporting for **{name}**. Standardized Score = **0.0**.")
         st.divider(); return
@@ -228,7 +229,6 @@ def plot_pillar(df, col, name, unit, desc, score_key, bins, is_high_danger=True,
     col1, col2 = st.columns([1, 2])
     with col1:
         st.subheader(name)
-        # (11) Pillar Description and Source
         st.markdown(f"**Description:** {desc}")
         st.markdown(f"**Data Source:** {source}")
         st.metric(f"ZIP {zip_in} Raw Value", f"{val:,.1f} {unit}")
@@ -242,7 +242,7 @@ def plot_pillar(df, col, name, unit, desc, score_key, bins, is_high_danger=True,
 
     with col2:
         fig, ax = plt.subplots(figsize=(10, 3.5))
-        # (9) Histogram with Red Danger Zones
+        # (9) Danger zones in Red
         counts, edges, patches = ax.hist(data, bins=bins, color='#bdc3c7', alpha=0.7, density=True)
         thresh_line = mean_v + std_v if is_high_danger else mean_v - std_v
         for i in range(len(patches)):
@@ -250,9 +250,9 @@ def plot_pillar(df, col, name, unit, desc, score_key, bins, is_high_danger=True,
             if (is_high_danger and mid > thresh_line) or (not is_high_danger and mid < thresh_line):
                 patches[i].set_facecolor('#e74c3c')
         
-        # (10) SD Curve Fit
-        x = np.linspace(data.min(), data.max(), 500)
-        ax.plot(x, norm.pdf(x, mean_v, std_v), color='black', lw=2, label='Normal Distribution')
+        # (10) SD Curve fit
+        x_vals = np.linspace(data.min(), data.max(), 100)
+        ax.plot(x_vals, norm.pdf(x_vals, mean_v, std_v), color='black', lw=2, label='Normal Distribution')
         
         ax.axvline(val, color='blue', lw=3, label=f'ZIP {zip_in}')
         ax.axvline(mean_v + std_v, color='red', ls=':', lw=2, label='+1 SD')
@@ -261,13 +261,13 @@ def plot_pillar(df, col, name, unit, desc, score_key, bins, is_high_danger=True,
         st.pyplot(fig)
     st.divider()
 
-# Detailed Pillar Data for Loop
+# Updated logic for anchors
 pillars = [
-    (df_ejsm, 'CIscore', 'Environmental Justice', 'Points', "Combines pollution exposure with population sensitivity.", 's_e', 20, False, "SCAG / CalEnviroScreen 4.0 (2022)"),
-    (df_income, 'med_hh_income', 'Median HH Income', '$USD', "Inverted to show higher impact for lower income communities.", 's_i', 250, False, "US Census Bureau ACS 5-Year Estimates (2021)"),
-    (df_heat, 'DegHourDay', 'Heat Burden', 'Days', "Degree-hour days above the local baseline.", 's_h', 150, True, "NOAA Urban Heat Watch (2022)"),
-    (df_snap, 'SNAP_pct', 'Food Access', '% Pop', "Households using SNAP; indicates risk of food insecurity.", 's_s', 150, True, "USDA Food Access Research Atlas (2019)")
+    (df_ejsm, 'CIscore', 'Environmental Justice (EJSM)', 'Points', "Communities will low Enviromental Justice score are at a higher need for increased green space", 's_e', 20, False, "SCAG / CalEnviroScreen 4.0 (2022)", "environmental-justice-ejsm"),
+    (df_income, 'med_hh_income', 'Economic Need', '$USD', "Low Income communities are often overlooked and underserved for publically accessable green spaces", 's_i', 250, False, "US Census Bureau ACS 5-Year Estimates (2021)", "economic-need"),
+    (df_heat, 'DegHourDay', 'Heat Burden', 'Days', "Urban heat is a result of lack of canopy cover and can causes dangerously high temperatures, yet gardens can limit this effect by actively cooling these areas through transpiration.", 's_h', 150, True, "NOAA Urban Heat Watch (2022)", "heat-burden"),
+    (df_snap, 'SNAP_pct', 'Food Access (SNAP)', '% Pop', "Pinpoints 'food deserts' where affordable, fresh produce is scarce. Good karma Garden's work can help to aliviate this burden.", 's_s', 150, True, "USDA Food Access Research Atlas (2019)", "food-access-snap")
 ]
 
 for p in sorted(pillars, key=lambda x: raw_scores[x[5]], reverse=True):
-    plot_pillar(p[0], p[1], p[2], p[3], p[4], p[5], p[6], p[7], source=p[8])
+    plot_pillar(p[0], p[1], p[2], p[3], p[4], p[5], p[6], p[7], source=p[8], anchor_id=p[9])
