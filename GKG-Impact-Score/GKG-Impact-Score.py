@@ -17,7 +17,7 @@ with st.expander("📖 Methodology, Data Sources & Years"):
 
     ### **Why Each Pillar Matters**
     * **[Environmental Justice (EJSM)](#environmental-justice-ejsm):** Communities with low Environmental Justice scores have a higher need for increased green space.
-    * **[Economic Need](#economic-need):** Low-income communities are often overlooked and underserved regarding publicly accessible green spaces.
+    * **[Median Household Income](#median-household-income):** Low-income communities are often overlooked and underserved regarding publicly accessible green spaces.
     * **[Heat Burden](#heat-burden):** Urban heat is a result of a lack of canopy cover and can cause dangerously high temperatures. Gardens limit this effect by actively cooling areas through transpiration.
     * **[Food Access (SNAP)](#food-access-snap):** Pinpoints 'food deserts' where affordable, fresh produce is scarce. Good Karma Gardens' work helps to alleviate this burden.
 
@@ -31,22 +31,16 @@ with st.expander("📖 Methodology, Data Sources & Years"):
     
     $$Impact Score = s_{e} + s_{i} + s_{h} + s_{s}$$
     
-    **Weighting:** Currently, all pillars are weighted equally (multiplied by 1.0). If you wish to prioritize one pillar over others, navigate to the code and look for the **# --- CUSTOM WEIGHTING ADJUSTMENT ---** section. You can multiply the specific variable by a custom weight. 
+    **Weighting:** Currently, all pillars are weighted equally. If you wish to prioritize one pillar over others (e.g., placing more importance on Food Access), you must adjust this manually in the Python script. 
     
-    **Variable Key for Weighting:**
-    * `s_e` = Environmental Justice (EJSM)
-    * `s_i` = Economic Need (Income)
-    * `s_h` = Heat Burden (Temperature)
-    * `s_s` = Food Access (SNAP)
-
-    *Example: To make Heat Burden twice as important as the others, change the code to: `(raw_scores['s_h'] * 2.0) + raw_scores['s_e'] + raw_scores['s_i'] + raw_scores['s_s']`.*
+    Please navigate to **SECTION 2: LOCAL ANALYSIS** within the code and look for the header **# --- CUSTOM WEIGHTING ADJUSTMENT ---** for instructions and examples on how to modify these values.
 
     ### **Impact Ranges & Severity Logic**
     The ranges are designed to reflect how community needs **compound**. 
     - <span style="color:#2ecc71; font-weight:bold;">0.0 - 0.8 (Low Impact):</span> **Stable Baseline.** These areas usually only face one minor issue or none at all. The narrow range reflects a high degree of community resilience.
     - <span style="color:#f1c40f; font-weight:bold;">0.8 - 1.6 (Medium Impact):</span> **Emerging Vulnerability.** At this level, at least one pillar is showing significant stress, or two are showing moderate stress.
     - <span style="color:#e67e22; font-weight:bold;">1.6 - 2.4 (High Impact):</span> **Multi-Factor Need.** This range indicates that at least two pillars are in a "Danger Zone." The community is struggling on multiple fronts simultaneously.
-    - <span style="color:#e74c3c; font-weight:bold;">2.4 - 4.0 (Extreme Impact):</span> **The Danger Zone.** This range is much wider because it accounts for **Systemic Compounding.** When a community scores high across three or four pillars (Pollution + Poverty + Heat + Food Insecurity), the crises don't just add up—they multiply. This wide "bucket" captures the most critical areas in LA where every single intervention is life-changing.
+    - <span style="color:#e74c3c; font-weight:bold;">2.4 - 4.0 (Extreme Impact):</span> **The Danger Zone.** This range is much wider because it accounts for **Systemic Compounding.** When a community scores high across three or four pillars (Pollution + Median Household Income + Heat + Food Insecurity), the crises don't just add up—they multiply. This wide "bucket" captures the most critical areas in LA where every single intervention is life-changing.
     """, unsafe_allow_html=True)
 
 # ----------------------------
@@ -149,8 +143,24 @@ if missing_info_count >= 3:
     st.stop()
 
 # --- CUSTOM WEIGHTING ADJUSTMENT ---
-# variables: s_e (EJSM), s_i (Income), s_h (Heat), s_s (SNAP)
-# To weight a pillar, multiply the specific variable below by your desired factor.
+# Variable Key for Weighting:
+# s_e = Environmental Justice (EJSM)
+# s_i = Median Household Income
+# s_h = Heat Burden (Temperature)
+# s_s = Food Access (SNAP)
+#
+# HOW TO WEIGHT: 
+# To weight a pillar, multiply its specific variable below by your desired factor.
+# 
+# Example 1: To make Food Access (SNAP) twice as important as everything else:
+# actual_score = (raw_scores['s_s'] * 2.0) + raw_scores['s_e'] + raw_scores['s_i'] + raw_scores['s_h']
+#
+# Example 2: To make everything ELSE twice as important as Food Access (SNAP):
+# actual_score = raw_scores['s_s'] + (raw_scores['s_e'] * 2.0) + (raw_scores['s_i'] * 2.0) + (raw_scores['s_h'] * 2.0)
+#
+# Example 3: Original Heat Burden example (Heat twice as important):
+# actual_score = (raw_scores['s_h'] * 2.0) + raw_scores['s_e'] + raw_scores['s_i'] + raw_scores['s_s']
+
 actual_score = raw_scores.sum() 
 
 # Monte Carlo: 10,000 simulations
@@ -294,7 +304,7 @@ def plot_pillar(df, col, name, unit, desc, score_key, bins, is_high_danger=True,
         ax.axvline(mean_v + std_v, color='red', ls=':', lw=2, label='±1 SD')
         ax.axvline(mean_v - std_v, color='red', ls=':', lw=2)
         
-        ax.set_xlabel(f"{name} ({unit})")
+        ax.set_xlabel(f"{unit}") # Cleaned up to show just the units on the X-axis
         ax.set_ylabel("Frequency Density")
         ax.legend(fontsize='xx-small', ncol=2)
         st.pyplot(fig)
@@ -305,12 +315,12 @@ pillars = [
      "This metric evaluates environmental justice across hazard proximity, health risk, social vulnerability, and canopy cover. Scores range from 4 to 20. Areas scoring more than 1 SD below the mean (< 7.65) are identified as having the highest need for community green space.", 
      's_e', 20, False, "USC / Occidental College / LA County (2022)", "environmental-justice-ejsm"),
     
-    (df_income, 'med_hh_income', 'Economic Need', '$USD', 
-     "Identifies economic barriers to greening. With a county-wide mean income of $93,525, 'Danger Zones' are defined as tracts at or below $53,423. These areas are prioritized for garden investment as they are often underserved.", 
-     's_i', 250, False, "US Census Bureau ACS 5-Year Estimates (2021)", "economic-need"),
+    (df_income, 'med_hh_income', 'Median Household Income', '$USD', 
+     "Measures the median income for households within the tract. With a county-wide mean income of $93,525, 'Danger Zones' are defined as tracts at or below $53,423. Lower income levels directly correlate to fewer private green spaces and higher climate vulnerability.", 
+     's_i', 250, False, "US Census Bureau ACS 5-Year Estimates (2021)", "median-household-income"),
     
-    (df_heat, 'DegHourDay', 'Heat Burden', 'Days', 
-     "Measures heat intensity via 'Degree Hours per day.' With a county median of 42.36, areas exceeding 82.61 Degree Hours are 'Danger Zones.' Gardens mitigate this by actively cooling these areas through transpiration.", 
+    (df_heat, 'DegHourDay', 'Heat Burden', 'Degree Hours per Day', 
+     "Measured in 'Degree Hours per Day,' which tracks how many degrees—and for how long—the local temperature exceeds a baseline of 80°F. With a county median of 42.36, areas exceeding 82.61 are 'Danger Zones.' High numbers indicate intense, sustained heat exposure that can be mitigated by garden transpiration.", 
      's_h', 150, True, "Safe Clean Water Program LA (2022)", "heat-burden"),
     
     (df_snap, 'SNAP_pct', 'Food Access (SNAP)', '% Pop', 
