@@ -12,19 +12,12 @@ st.title("🌿 Good Karma Gardens: Impact Analysis Dashboard")
 
 with st.expander("📖 Methodology & Standardization (Click to Expand)"):
     st.markdown("""
-    ### **1. How to Use This Tool**
-    * **Update Location:** Use the **Sidebar on the left** to enter any 5-digit Los Angeles County ZIP code.
+    ### **1. The Impact Equation**
+    The Final Impact Score is a weighted average of four standardized dimensions. Because we use a Monte Carlo simulation, the "Weights" ($w$) vary across 10,000 runs to ensure the result is robust regardless of which factor you prioritize:
     
-    ### **2. How We Standardize the Data**
-    To compare different units, we scale every factor between **0.0 and 1.0**:
-    * **High Value (1.0) = High Need.**
-    * **Inverse Scaling:** For Income, a **lower** raw number equals a higher impact score.
+    $$Score = (w_1 \cdot EJSM) + (w_2 \cdot Income) + (w_3 \cdot Heat) + (w_4 \cdot SNAP)$$
     
-    ### **3. Impact Tier Qualifications**
-    * 🟢 **Low Impact (0.00 - 0.15):** High-resource areas.
-    * 🟡 **Medium Impact (0.15 - 0.30):** Moderate need.
-    * 🟠 **High Impact (0.30 - 0.45):** Significant vulnerability.
-    * 🔴 **Very High Impact (0.45+):** **'Danger Zone'**; critical need.
+    *Where $\sum w = 1.0$ and each factor is scaled from 0.0 to 1.0.*
     """)
 
 # ----------------------------
@@ -43,7 +36,6 @@ def load_all_data():
     if data_path is None:
         raise FileNotFoundError("Could not find the 'data' folder.")
 
-    # Data Loading
     df_ejsm = pd.read_csv(f"{data_path}/EJSM_Origonal.csv")
     df_ejsm.columns = df_ejsm.columns.str.strip()
     df_ejsm['GEOID10'] = df_ejsm['Tract_1'].astype(str).str.split('.').str[0].str.zfill(11)
@@ -104,7 +96,7 @@ zip_in = st.sidebar.text_input("Enter ZIP Code:", "91505")
 match = df_ziptract[df_ziptract['ZIP'] == zip_in]
 
 if match.empty:
-    st.error(f"❌ ZIP Code {zip_in} Not Found in LA County Data.")
+    st.error(f"❌ ZIP Code {zip_in} Not Found in LA County Dataset.")
     st.stop()
 
 target_geoid = match.iloc[0]['GEOID10']
@@ -119,23 +111,16 @@ if len(idx) > 0:
     d = sim_results[:, idx[0]]
     m, s = norm.fit(d)
     
-    # DRIVER ANALYSIS
+    # Driver Check (30% Threshold)
     raw_scores = df_comb.iloc[idx[0]][['s_e', 's_i', 's_h', 's_s']]
     total_raw = raw_scores.sum()
     pcts = (raw_scores / total_raw) if total_raw > 0 else raw_scores
-    
-    labels = {
-        's_e': 'Environmental Justice (EJSM)',
-        's_i': 'Economic Need (Income)',
-        's_h': 'Heat Burden',
-        's_s': 'Food Insecurity (SNAP)'
-    }
-    
+    labels = {'s_e': 'EJSM', 's_i': 'Income Need', 's_h': 'Heat', 's_s': 'Food Access'}
     drivers = [labels[k] for k, v in pcts.items() if v >= 0.30]
-    driver_text = f" & driven primarily by **{', '.join(drivers)}**" if drivers else ""
+    driver_text = f" & driven by **{', '.join(drivers)}**" if drivers else ""
 
     if m < 0.15: tier, color, desc = "LOW IMPACT", "#2ecc71", "Healthy baseline."
-    elif 0.15 <= m < 0.30: tier, color, desc = "MEDIUM IMPACT", "#f1c40f", "Emerging needs detected."
+    elif 0.15 <= m < 0.30: tier, color, desc = "MEDIUM IMPACT", "#f1c40f", "Emerging needs."
     elif 0.30 <= m < 0.45: tier, color, desc = "HIGH IMPACT", "#e67e22", "Significant vulnerability."
     else: tier, color, desc = "VERY HIGH IMPACT", "#e74c3c", "DANGER ZONE: Critical need."
 
@@ -150,37 +135,36 @@ if len(idx) > 0:
         x_range = np.linspace(min(d), max(d), 100)
         ax.plot(x_range, norm.pdf(x_range, m, s), color='#2e86c1', lw=3)
         ax.axvline(m, color='#1b4f72', lw=2, label=f'Mean: {m:.3f}')
-        ax.axvline(m-s, color='#e74c3c', ls='--', label='-1 SD')
-        ax.axvline(m+s, color='#e74c3c', ls='--', label='+1 SD')
-        ax.set_title(f"Impact Simulation for ZIP {zip_in}")
-        ax.legend()
+        ax.axvline(m-s, color='#e74c3c', ls='--', label=f'-1 SD: {m-s:.3f}')
+        ax.axvline(m+s, color='#e74c3c', ls='--', label=f'+1 SD: {m+s:.3f}')
+        ax.set_title(f"Simulation Variance for {zip_in}")
+        ax.legend(fontsize='small')
         st.pyplot(fig)
     with col_r:
-        st.markdown("### **Statistical Breakdown**")
+        st.markdown("### **Impact Summary**")
         st.table(pd.DataFrame({
-            "Metric": ["Avg Impact Score", "Uncertainty (SD)", "Lower Bound", "Upper Bound"], 
+            "Metric": ["Avg Score", "Variance (SD)", "Lower Bound", "Upper Bound"], 
             "Value": [f"{m:.4f}", f"{s:.4f}", f"{m-s:.4f}", f"{m+s:.4f}"]
         }))
 
 # ----------------------------
-# 3. Factor Deep-Dive (FIXED)
+# 3. Factor Deep-Dive (Standard Deviation Curve Fit & Custom Bins)
 # ----------------------------
 st.divider()
 st.header("🔍 Factor Distributions & Danger Zones")
 
-def plot_component(df, col, name, unit, description, source_info, score_key, is_high_danger=True):
-    # Safety Check for missing local data
+
+
+def plot_component(df, col, name, unit, description, source_info, score_key, bin_count, is_high_danger=True):
     local_data = df[df['GEOID10'] == target_geoid]
     if local_data.empty:
-        st.warning(f"No specific {name} data available for this tract.")
+        st.warning(f"No specific {name} data for this tract.")
         return
 
     current_val = local_data[col].values[0]
     data = df[col].dropna()
     mean_v, std_v = data.mean(), data.std()
     thresh = mean_v + std_v if is_high_danger else mean_v - std_v
-    
-    # FIXED: Use explicit score_key instead of string slicing logic
     std_score = df_comb.iloc[idx[0]][score_key]
 
     c1, c2 = st.columns([1, 2])
@@ -188,28 +172,42 @@ def plot_component(df, col, name, unit, description, source_info, score_key, is_
         st.subheader(name)
         st.write(description)
         st.metric(f"Current Value ({zip_in})", f"{current_val:,.2f} {unit}")
-        st.write(f"**Impact Weight:** This factor contributes **{std_score:.3f}** to the final standardized score.")
-        st.caption(f"**Source:** {source_info}")
+        st.write(f"**Impact Weight:** {std_score:.3f}")
+        st.table(pd.DataFrame({
+            "Metric": ["County Mean", "SD", "Danger Cutoff"], 
+            "Value": [f"{mean_v:,.2f}", f"{std_v:,.2f}", f"{thresh:,.2f}"]
+        }))
 
     with c2:
         fig, ax = plt.subplots(figsize=(10, 4))
-        counts, bin_edges, patches = ax.hist(data, bins=100, color='#bdc3c7', alpha=0.8, density=True)
+        # RESTORED BIN COUNTS
+        counts, bin_edges, patches = ax.hist(data, bins=bin_count, color='#bdc3c7', alpha=0.8, density=True)
+        
+        # Color Danger Zones
         for i in range(len(patches)):
             mid = (bin_edges[i] + bin_edges[i+1]) / 2
             if (is_high_danger and mid > thresh) or (not is_high_danger and mid < thresh):
                 patches[i].set_facecolor('#e74c3c')
         
+        # RESTORED SD CURVE & MARKERS
+        x_axis = np.linspace(data.min(), data.max(), 500)
+        ax.plot(x_axis, norm.pdf(x_axis, mean_v, std_v), color='black', lw=2, label='Normal Distribution')
+        ax.axvline(mean_v, color='black', lw=1.5, label='County Mean')
+        ax.axvline(mean_v - std_v, color='gray', ls=':', label='-1 SD')
+        ax.axvline(mean_v + std_v, color='gray', ls=':', label='+1 SD')
+        
+        # Current ZIP marker
         ax.axvline(current_val, color='blue', lw=3, label=f'ZIP {zip_in}')
-        ax.axvline(thresh, color='#e74c3c', ls='--', label='Danger Cutoff')
-        ax.set_title(f"LA County Distribution: {name}")
-        ax.legend()
+        
+        ax.set_title(f"LA County {name} Context")
+        ax.legend(fontsize='x-small', ncol=2)
         st.pyplot(fig)
 
-# Component Plots - Passing explicit score_key
-plot_component(df_ejsm, 'CIscore', 'Environmental Justice (EJSM)', 'Score', "Pollution and vulnerability.", "USC (2022)", 's_e', False)
+# Component Plots with Original Bins
+plot_component(df_ejsm, 'CIscore', 'Environmental Justice (EJSM)', 'Score', "Pollution/Vulnerability Index.", "USC", 's_e', 20, False)
 st.divider()
-plot_component(df_income, 'med_hh_income', 'Median HH Income', 'USD ($)', "Lower income = higher need.", "Census Bureau", 's_i', False)
+plot_component(df_income, 'med_hh_income', 'Median HH Income', 'USD ($)', "Economic Need Tracking.", "Census", 's_i', 250, False)
 st.divider()
-plot_component(df_heat, 'DegHourDay', 'Heat Burden', 'Deg-Hr Days', "Heat island intensity.", "SCWP LA", 's_h', True)
+plot_component(df_heat, 'DegHourDay', 'Heat Burden', 'Deg-Hr Days', "Urban Heat Island Intensity.", "SCWP", 's_h', 150, True)
 st.divider()
-plot_component(df_snap, 'SNAP_pct', 'Food Access (SNAP %)', '% Pop', "Food insecurity proxy.", "USDA Data", 's_s', True)
+plot_component(df_snap, 'SNAP_pct', 'Food Access (SNAP %)', '% Pop', "Food Insecurity Proxy.", "USDA", 's_s', 150, True)
