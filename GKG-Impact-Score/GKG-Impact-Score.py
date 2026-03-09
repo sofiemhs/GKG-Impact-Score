@@ -16,15 +16,15 @@ with st.expander("📖 Methodology & Standardization (Click to Expand)"):
     * **Update Location:** Use the **Sidebar on the left** to enter any 5-digit Los Angeles County ZIP code.
     
     ### **2. How We Standardize the Data**
-    To compare different units (like Dollars vs. Heat Degrees), we scale every factor between **0.0 and 1.0**:
-    * **High Value (1.0) = High Need:** For Heat and SNAP, a higher raw number equals a higher score.
+    To compare different units, we scale every factor between **0.0 and 1.0**:
+    * **High Value (1.0) = High Need.**
     * **Inverse Scaling:** For Income, a **lower** raw number equals a higher impact score.
     
     ### **3. Impact Tier Qualifications**
     * 🟢 **Low Impact (0.00 - 0.15):** High-resource areas.
     * 🟡 **Medium Impact (0.15 - 0.30):** Moderate need.
     * 🟠 **High Impact (0.30 - 0.45):** Significant vulnerability.
-    * 🔴 **Very High Impact (0.45+):** **'Danger Zone'**; critical need for intervention.
+    * 🔴 **Very High Impact (0.45+):** **'Danger Zone'**; critical need.
     """)
 
 # ----------------------------
@@ -103,17 +103,14 @@ st.sidebar.header("📍 Change Location")
 zip_in = st.sidebar.text_input("Enter ZIP Code:", "91505")
 match = df_ziptract[df_ziptract['ZIP'] == zip_in]
 
-# 1. NON-LA COUNTY CHECK
 if match.empty:
-    st.error(f"❌ ZIP Code {zip_in} Not Found.")
-    st.warning("This dashboard currently only supports **Los Angeles County**. If you entered an out-of-county ZIP, please try an LA County ZIP (e.g., 90001, 91505, 90210).")
+    st.error(f"❌ ZIP Code {zip_in} Not Found in LA County Data.")
     st.stop()
 
 target_geoid = match.iloc[0]['GEOID10']
 idx = np.where(df_comb['GEOID10'].values == target_geoid)[0]
 
 if len(idx) > 0:
-    # 10k Monte Carlo
     x_matrix = df_comb[['s_e','s_i','s_h','s_s']].to_numpy()
     weights = np.random.uniform(0, 1, (10000, 4))
     weights /= weights.sum(axis=1, keepdims=True)
@@ -122,7 +119,7 @@ if len(idx) > 0:
     d = sim_results[:, idx[0]]
     m, s = norm.fit(d)
     
-    # 2 & 3. DRIVER ANALYSIS
+    # DRIVER ANALYSIS
     raw_scores = df_comb.iloc[idx[0]][['s_e', 's_i', 's_h', 's_s']]
     total_raw = raw_scores.sum()
     pcts = (raw_scores / total_raw) if total_raw > 0 else raw_scores
@@ -137,7 +134,6 @@ if len(idx) > 0:
     drivers = [labels[k] for k, v in pcts.items() if v >= 0.30]
     driver_text = f" & driven primarily by **{', '.join(drivers)}**" if drivers else ""
 
-    # Tier Logic
     if m < 0.15: tier, color, desc = "LOW IMPACT", "#2ecc71", "Healthy baseline."
     elif 0.15 <= m < 0.30: tier, color, desc = "MEDIUM IMPACT", "#f1c40f", "Emerging needs detected."
     elif 0.30 <= m < 0.45: tier, color, desc = "HIGH IMPACT", "#e67e22", "Significant vulnerability."
@@ -147,7 +143,6 @@ if len(idx) > 0:
         <h1 style="color:white; margin:0;">STREET STATUS: {tier}</h1>
         <p style="color:white; font-size:1.4rem; margin-top:5px; font-weight:bold;">{desc}{driver_text}</p></div>""", unsafe_allow_html=True)
 
-    st.write("")
     col_l, col_r = st.columns([2, 1])
     with col_l:
         fig, ax = plt.subplots(figsize=(10, 4.5))
@@ -160,7 +155,6 @@ if len(idx) > 0:
         ax.set_title(f"Impact Simulation for ZIP {zip_in}")
         ax.legend()
         st.pyplot(fig)
-    
     with col_r:
         st.markdown("### **Statistical Breakdown**")
         st.table(pd.DataFrame({
@@ -169,25 +163,31 @@ if len(idx) > 0:
         }))
 
 # ----------------------------
-# 3. Factor Deep-Dive
+# 3. Factor Deep-Dive (FIXED)
 # ----------------------------
 st.divider()
 st.header("🔍 Factor Distributions & Danger Zones")
 
-def plot_component(df, col, name, unit, description, source_info, current_val, is_high_danger=True):
+def plot_component(df, col, name, unit, description, source_info, score_key, is_high_danger=True):
+    # Safety Check for missing local data
+    local_data = df[df['GEOID10'] == target_geoid]
+    if local_data.empty:
+        st.warning(f"No specific {name} data available for this tract.")
+        return
+
+    current_val = local_data[col].values[0]
     data = df[col].dropna()
     mean_v, std_v = data.mean(), data.std()
     thresh = mean_v + std_v if is_high_danger else mean_v - std_v
     
-    # Calculate standardized contribution
-    std_score = df_comb.iloc[idx[0]][f's_{col[0].lower()}' if name != 'Heat Burden' else 's_h']
+    # FIXED: Use explicit score_key instead of string slicing logic
+    std_score = df_comb.iloc[idx[0]][score_key]
 
     c1, c2 = st.columns([1, 2])
     with c1:
         st.subheader(name)
         st.write(description)
         st.metric(f"Current Value ({zip_in})", f"{current_val:,.2f} {unit}")
-        # NEW: Show contribution to the total
         st.write(f"**Impact Weight:** This factor contributes **{std_score:.3f}** to the final standardized score.")
         st.caption(f"**Source:** {source_info}")
 
@@ -205,11 +205,11 @@ def plot_component(df, col, name, unit, description, source_info, current_val, i
         ax.legend()
         st.pyplot(fig)
 
-# Component Plots
-plot_component(df_ejsm, 'CIscore', 'Environmental Justice (EJSM)', 'Score', "Pollution and vulnerability.", "USC (2022)", df_ejsm[df_ejsm['GEOID10']==target_geoid]['CIscore'].values[0], False)
+# Component Plots - Passing explicit score_key
+plot_component(df_ejsm, 'CIscore', 'Environmental Justice (EJSM)', 'Score', "Pollution and vulnerability.", "USC (2022)", 's_e', False)
 st.divider()
-plot_component(df_income, 'med_hh_income', 'Median HH Income', 'USD ($)', "Lower income = higher need.", "Census Bureau", df_income[df_income['GEOID10']==target_geoid]['med_hh_income'].values[0], False)
+plot_component(df_income, 'med_hh_income', 'Median HH Income', 'USD ($)', "Lower income = higher need.", "Census Bureau", 's_i', False)
 st.divider()
-plot_component(df_heat, 'DegHourDay', 'Heat Burden', 'Deg-Hr Days', "Urban heat island intensity.", "SCWP LA", df_heat[df_heat['GEOID10']==target_geoid]['DegHourDay'].values[0], True)
+plot_component(df_heat, 'DegHourDay', 'Heat Burden', 'Deg-Hr Days', "Heat island intensity.", "SCWP LA", 's_h', True)
 st.divider()
-plot_component(df_snap, 'SNAP_pct', 'Food Access (SNAP %)', '% Pop', "Food insecurity proxy.", "USDA Data", df_snap[df_snap['GEOID10']==target_geoid]['SNAP_pct'].values[0], True)
+plot_component(df_snap, 'SNAP_pct', 'Food Access (SNAP %)', '% Pop', "Food insecurity proxy.", "USDA Data", 's_s', True)
