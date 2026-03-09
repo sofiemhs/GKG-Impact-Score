@@ -305,7 +305,7 @@ pillars = [
      's_h', 150, True, "Safe Clean Water Program LA (2022)", "heat-burden"),
     
     (df_snap, 'SNAP_pct', 'Food Access (SNAP)', '% Pop', 
-     "Calculated as (SNAP Participants / Total Population) * 100. The county mean is 3.15%. 'Danger Zones' exceed 5.52% participation, pinpointing 'food deserts' where gardens alleviate the burden of scarce fresh produce.", 
+     "Calculated as (SNAP Participants / Total Population) * 100. The county mean is 3.15%. 'Danger Zones' exceed 5.52% participation, pinpointing 'food deserts' where gardens alleviate the burden of fresh produce.", 
      's_s', 150, True, "USDA Food Access Research Atlas (2019)", "food-access-snap")
 ]
 
@@ -314,28 +314,47 @@ for p in sorted(pillars, key=lambda x: raw_scores[x[5]], reverse=True):
 
 
 # ----------------------------
-# 5. GEOSPATIAL VISUALIZATION (NEW SECTION)
+# 5. ARCGIS COUNTY NEED MAPPING
 # ----------------------------
 st.header("🗺️ ArcGIS County Need Mapping")
 st.markdown("""
-Visualizing the intersection of environmental and social stressors across Los Angeles County. 
-These maps highlight the priority zones for **Good Karma Gardens** interventions.
+The following spatial data layers illustrate the geographic distribution of need across Los Angeles County. 
+These visuals help contextualize the **Impact Score** by showing where environmental and social stressors intersect on a regional scale.
 """)
 
-# --- EDIT PATHS BELOW ---
-map_path_1 = "PASTE_YOUR_FIRST_MAP_PATH_HERE.png"
-map_path_2 = "PASTE_YOUR_SECOND_MAP_PATH_HERE.png"
+# Map layout in a 2x2 grid
+col_m1, col_m2 = st.columns(2)
 
-col_map1, col_map2 = st.columns(2)
-
-with col_map1:
-    if os.path.exists(map_path_1):
-        st.image(map_path_1, caption="LA County Impact Hotspots", use_container_width=True)
+with col_m1:
+    st.subheader("⚖️ Environmental Justice (EJSM)")
+    map_ejsm = "GKG-Impact-Score/map_photos/EJSM.png"
+    if os.path.exists(map_ejsm):
+        st.image(map_ejsm, use_container_width=True)
     else:
-        st.info("ℹ️ **Map 1:** Please add the file path for your ArcGIS photo in the code.")
+        st.info("Map not found at specified path.")
+    st.caption("Visualizes cumulative hazard proximity and health risks.")
 
-with col_map2:
-    if os.path.exists(map_path_2):
-        st.image(map_path_2, caption="Regional Need Distribution", use_container_width=True)
+    st.subheader("🥦 Food Access (SNAP)")
+    map_food = "GKG-Impact-Score/map_photos/food_access.png"
+    if os.path.exists(map_food):
+        st.image(map_food, use_container_width=True)
     else:
-        st.info("ℹ️ **Map 2:** Please add the file path for your ArcGIS photo in the code.")
+        st.info("Map not found at specified path.")
+    st.caption("Highlights 'food deserts' and SNAP participation density.")
+
+with col_m2:
+    st.subheader("🔥 Urban Heat Burden")
+    map_heat = "GKG-Impact-Score/map_photos/urban_heat.png"
+    if os.path.exists(map_heat):
+        st.image(map_heat, use_container_width=True)
+    else:
+        st.info("Map not found at specified path.")
+    st.caption("Displays areas with high degree-hour exposure and low canopy cover.")
+
+    st.subheader("💰 Median Household Income")
+    map_income = "GKG-Impact-Score/map_photos/median_household_income.png"
+    if os.path.exists(map_income):
+        st.image(map_income, use_container_width=True)
+    else:
+        st.info("Map not found at specified path.")
+    st.caption("Identifies underserved low-income tracts across the county.")
