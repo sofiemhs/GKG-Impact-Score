@@ -25,14 +25,13 @@ with st.expander("📖 Methodology, Data Sources & Years"):
     Every raw data point (dollars, degrees, or percentages) is standardized on a scale of **0.0 to 1.0**. 
     * **0.0** represents the lowest need/impact in the county.
     * **1.0** represents the highest need/impact in the county.
-    * The total **Impact Score (0.0 - 4.0)** is the sum of these four pillars.
 
     ### **Impact Score Equation**
-    The final **Impact Score** is the cumulative sum of the standardized scores ($s$) across all four pillars:
+    The total **Impact Score (0.0 - 4.0)** is the sum of these four pillars. The final score is the cumulative sum of the standardized scores ($s$) across all four pillars:
     
     $$Impact Score = s_{EJSM} + s_{Economic} + s_{Heat} + s_{Food}$$
     
-    By summing these values, we identify areas where multiple vulnerabilities intersect. A location with a high score in all four categories will approach a maximum score of **4.0**, indicating an urgent priority for intervention.
+    **Weighting:** Currently, all pillars are weighted equally. If you wish to weight a specific pillar more heavily (e.g., prioritizing Heat Burden over Income), you can adjust this in the Python script. Navigate to **SECTION 2: LOCAL ANALYSIS** and modify the `actual_score` calculation by multiplying the specific pillar by a coefficient (e.g., `raw_scores['s_h'] * 1.5`).
 
     ### **Impact Ranges**
     - <span style="color:#2ecc71; font-weight:bold;">0.0 - 0.8 (Low Impact):</span> Healthy baseline; resilience is present.
@@ -140,7 +139,10 @@ if missing_info_count >= 3:
     st.error(ERROR_MSG)
     st.stop()
 
-actual_score = raw_scores.sum()
+# --- CUSTOM WEIGHTING ADJUSTMENT ---
+# To adjust weights, multiply the score keys below by your desired factor 
+# Example: (raw_scores['s_h'] * 1.5)
+actual_score = raw_scores.sum() 
 
 # Monte Carlo: 10,000 simulations
 x_matrix = df_comb[['s_e', 's_i', 's_h', 's_s']].to_numpy()
@@ -174,7 +176,6 @@ with col_l:
     ax_sim.plot(x_range, norm.pdf(x_range, m_loc, s_loc), color='#2e86c1', lw=3)
     ax_sim.axvline(actual_score, color='#1b4f72', lw=3, label=f'Raw Calculation: {actual_score:.2f}')
     
-    # Combined Legend Label for Confidence Bounds
     ax_sim.axvline(actual_score - s_loc, color='#e74c3c', ls=':', lw=2, label='Confidence Bounds')
     ax_sim.axvline(actual_score + s_loc, color='#e74c3c', ls=':', lw=2)
     
@@ -281,8 +282,6 @@ def plot_pillar(df, col, name, unit, desc, score_key, bins, is_high_danger=True,
         ax.plot(x_vals, norm.pdf(x_vals, mean_v, std_v), color='black', lw=2, label='Normal Distribution')
         
         ax.axvline(val, color='blue', lw=3, label=f'ZIP {zip_in}')
-        
-        # Combined Legend Label for +/- 1 SD
         ax.axvline(mean_v + std_v, color='red', ls=':', lw=2, label='±1 SD')
         ax.axvline(mean_v - std_v, color='red', ls=':', lw=2)
         
