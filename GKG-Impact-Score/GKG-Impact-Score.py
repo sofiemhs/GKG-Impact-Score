@@ -7,21 +7,26 @@ import os
 
 st.set_page_config(layout="wide", page_title="GKG Impact Dashboard")
 
-# --- HEADER SECTION ---
+# --- SECTION 1: THE STORY & THE MATH ---
 st.title("🌿 Good Karma Gardens: Impact Analysis Dashboard")
+st.markdown("""
+This dashboard identifies where lawn-to-garden conversions will have the highest community impact in Los Angeles County. 
+We look at four "Pillars of Need" to calculate a single **Impact Score**.
+""")
 
-with st.expander("📖 Methodology & Standardization (Click to Expand)"):
-    st.markdown("""
-    ### **1. The Impact Equation**
-    The Final Impact Score is a weighted average of four standardized dimensions. Because we use a Monte Carlo simulation, the "Weights" ($w$) vary across 10,000 runs to ensure the result is robust regardless of which factor you prioritize:
+with st.expander("📖 How the Math Works (For Outsiders)"):
+    st.write("### 1. Standardization")
+    st.write("Because we can't add 'Dollars' to 'Heat Degrees,' we convert everything to a scale of **0.0 to 1.0**. A 1.0 means that tract is in the highest need category for that specific factor.")
     
-    $$Score = (w_1 \cdot EJSM) + (w_2 \cdot Income) + (w_3 \cdot Heat) + (w_4 \cdot SNAP)$$
+    st.write("### 2. The Impact Equation")
+    st.latex(r"Total Impact = EJSM_{std} + Income_{std} + Heat_{std} + SNAP_{std}")
+    st.info("**Range:** 0.0 (Low Need) to 4.0 (Maximum Need).")
     
-    *Where $\sum w = 1.0$ and each factor is scaled from 0.0 to 1.0.*
-    """)
+    st.write("### 3. Sensitivity (Monte Carlo)")
+    st.write("We run 10,000 simulations where we randomly 'weight' different factors. This tells us if a ZIP code is high-need regardless of whether you care more about Heat or Food Access.")
 
 # ----------------------------
-# 1. Data Loading & Processing
+# Data Loading (Unchanged logic, corrected filename)
 # ----------------------------
 
 @st.cache_data
@@ -88,126 +93,135 @@ except Exception as e:
     st.stop()
 
 # ----------------------------
-# 2. Main Analytics
+# SECTION 2: LOCAL ANALYSIS
 # ----------------------------
 
-st.sidebar.header("📍 Change Location")
-zip_in = st.sidebar.text_input("Enter ZIP Code:", "91505")
+st.sidebar.header("📍 Set Location")
+zip_in = st.sidebar.text_input("Enter LA County ZIP:", "91505")
 match = df_ziptract[df_ziptract['ZIP'] == zip_in]
 
 if match.empty:
-    st.error(f"❌ ZIP Code {zip_in} Not Found in LA County Dataset.")
+    st.error(f"❌ ZIP {zip_in} is outside LA County or not in our dataset.")
     st.stop()
 
 target_geoid = match.iloc[0]['GEOID10']
 idx = np.where(df_comb['GEOID10'].values == target_geoid)[0]
 
 if len(idx) > 0:
+    # Calculation: Sum of factors (0-4 scale)
+    raw_pillar_scores = df_comb.iloc[idx[0]][['s_e','s_i','s_h','s_s']]
+    actual_score = raw_pillar_scores.sum()
+    
+    # Monte Carlo Sensitivity (multiplied by 4 to stay on 0-4 scale)
     x_matrix = df_comb[['s_e','s_i','s_h','s_s']].to_numpy()
     weights = np.random.uniform(0, 1, (10000, 4))
     weights /= weights.sum(axis=1, keepdims=True)
-    sim_results = np.dot(weights, x_matrix.T)
+    sim_results = np.dot(weights, x_matrix.T) * 4  # Scaled to 0-4
     
     d = sim_results[:, idx[0]]
     m, s = norm.fit(d)
     
-    # Driver Check (30% Threshold)
-    raw_scores = df_comb.iloc[idx[0]][['s_e', 's_i', 's_h', 's_s']]
-    total_raw = raw_scores.sum()
-    pcts = (raw_scores / total_raw) if total_raw > 0 else raw_scores
-    labels = {'s_e': 'EJSM', 's_i': 'Income Need', 's_h': 'Heat', 's_s': 'Food Access'}
-    drivers = [labels[k] for k, v in pcts.items() if v >= 0.30]
+    # Identify Primary Driver (30% of Total Score)
+    labels = {'s_e': 'EJSM', 's_i': 'Economic Need', 's_h': 'Heat', 's_s': 'Food Access'}
+    drivers = [labels[k] for k, v in (raw_pillar_scores / actual_score).items() if v >= 0.30]
     driver_text = f" & driven by **{', '.join(drivers)}**" if drivers else ""
 
-    if m < 0.15: tier, color, desc = "LOW IMPACT", "#2ecc71", "Healthy baseline."
-    elif 0.15 <= m < 0.30: tier, color, desc = "MEDIUM IMPACT", "#f1c40f", "Emerging needs."
-    elif 0.30 <= m < 0.45: tier, color, desc = "HIGH IMPACT", "#e67e22", "Significant vulnerability."
-    else: tier, color, desc = "VERY HIGH IMPACT", "#e74c3c", "DANGER ZONE: Critical need."
+    # Updated Tiers for 0-4 Scale
+    if actual_score < 0.8: tier, color, desc = "LOW IMPACT", "#2ecc71", "Area meets healthy baseline metrics."
+    elif 0.8 <= actual_score < 1.6: tier, color, desc = "MEDIUM IMPACT", "#f1c40f", "Emerging needs detected."
+    elif 1.6 <= actual_score < 2.4: tier, color, desc = "HIGH IMPACT", "#e67e22", "Significant vulnerability."
+    else: tier, color, desc = "VERY HIGH IMPACT", "#e74c3c", "DANGER ZONE: Critical priority."
 
     st.markdown(f"""<div style="background-color:{color}; padding:20px; border-radius:10px; text-align:center;">
         <h1 style="color:white; margin:0;">STREET STATUS: {tier}</h1>
         <p style="color:white; font-size:1.4rem; margin-top:5px; font-weight:bold;">{desc}{driver_text}</p></div>""", unsafe_allow_html=True)
 
+    st.header(f"📊 Impact Sensitivity for {zip_in}")
+    st.write("Even if we change the importance of each factor, where does the score land?")
+    
     col_l, col_r = st.columns([2, 1])
     with col_l:
-        fig, ax = plt.subplots(figsize=(10, 4.5))
-        ax.hist(d, bins=30, color='#aed6f1', density=True, alpha=0.7)
+        fig, ax = plt.subplots(figsize=(10, 4))
+        ax.hist(d, bins=30, color='#aed6f1', density=True, alpha=0.7, label='Simulation Distribution')
         x_range = np.linspace(min(d), max(d), 100)
-        ax.plot(x_range, norm.pdf(x_range, m, s), color='#2e86c1', lw=3)
-        ax.axvline(m, color='#1b4f72', lw=2, label=f'Mean: {m:.3f}')
-        ax.axvline(m-s, color='#e74c3c', ls='--', label=f'-1 SD: {m-s:.3f}')
-        ax.axvline(m+s, color='#e74c3c', ls='--', label=f'+1 SD: {m+s:.3f}')
-        ax.set_title(f"Simulation Variance for {zip_in}")
-        ax.legend(fontsize='small')
+        ax.plot(x_range, norm.pdf(x_range, m, s), color='#2e86c1', lw=3, label='Normal Curve Fit')
+        ax.axvline(actual_score, color='#1b4f72', lw=3, label=f'Actual Score: {actual_score:.2f}')
+        ax.axvline(actual_score-s, color='#e74c3c', ls='--', label='-1 SD')
+        ax.axvline(actual_score+s, color='#e74c3c', ls='--', label='+1 SD')
+        ax.set_xlabel("Impact Score (Scale 0-4)")
+        ax.legend(fontsize='x-small')
         st.pyplot(fig)
     with col_r:
-        st.markdown("### **Impact Summary**")
+        st.markdown("### **The Result**")
+        st.metric("Total Impact Score", f"{actual_score:.3f} / 4.0")
         st.table(pd.DataFrame({
-            "Metric": ["Avg Score", "Variance (SD)", "Lower Bound", "Upper Bound"], 
-            "Value": [f"{m:.4f}", f"{s:.4f}", f"{m-s:.4f}", f"{m+s:.4f}"]
+            "Standard Deviation": [f"{s:.4f}"],
+            "High-Confidence Range": [f"{actual_score-s:.2f} to {actual_score+s:.2f}"]
         }))
+        st.caption("A small Standard Deviation (SD) means the score is very stable regardless of priorities.")
 
-# ----------------------------
-# 3. Factor Deep-Dive (Standard Deviation Curve Fit & Custom Bins)
-# ----------------------------
+# --- SECTION 3: COUNTY-WIDE RANKING (CDF) ---
 st.divider()
-st.header("🔍 Factor Distributions & Danger Zones")
+st.header("🌎 Where does this ZIP rank in LA County?")
+st.write("We ranked all 2,000+ census tracts in LA from lowest need to highest need.")
+
+all_tract_sums = x_matrix.sum(axis=1)
+sorted_sums = np.sort(all_tract_sums)
+percentile = (all_tract_sums < actual_score).mean() * 100
+
+fig_cdf, ax_cdf = plt.subplots(figsize=(12, 3))
+ax_cdf.plot(sorted_sums, color='#2980b9', lw=3, label='LA County Need Curve')
+ax_cdf.fill_between(range(len(sorted_sums)), sorted_sums, alpha=0.1, color='#3498db')
+ax_cdf.scatter(np.where(all_tract_sums[np.argsort(all_tract_sums)] >= actual_score)[0][0], actual_score, color='red', s=100, zorder=5)
+ax_cdf.set_title("Cumulative Distribution of Need")
+ax_cdf.set_ylabel("Impact Score (0-4)")
+ax_cdf.set_xlabel("Tracts (Ranked Lowest to Highest)")
+st.pyplot(fig_cdf)
+st.success(f"**Ranking:** ZIP {zip_in} has a higher need than **{percentile:.1f}%** of LA County.")
 
 
 
-def plot_component(df, col, name, unit, description, source_info, score_key, bin_count, is_high_danger=True):
-    local_data = df[df['GEOID10'] == target_geoid]
-    if local_data.empty:
-        st.warning(f"No specific {name} data for this tract.")
-        return
+# --- SECTION 4: THE FOUR PILLARS ---
+st.divider()
+st.header("🔍 The Driving Factors")
+st.write("Below is the 'Raw Data' for each pillar compared to the rest of the county.")
 
-    current_val = local_data[col].values[0]
+def plot_pillar(df, col, name, unit, desc, score_key, bins, is_high_danger=True):
+    local_val = df[df['GEOID10'] == target_geoid][col].values[0]
     data = df[col].dropna()
     mean_v, std_v = data.mean(), data.std()
     thresh = mean_v + std_v if is_high_danger else mean_v - std_v
-    std_score = df_comb.iloc[idx[0]][score_key]
+    weight = df_comb.iloc[idx[0]][score_key]
 
     c1, c2 = st.columns([1, 2])
     with c1:
         st.subheader(name)
-        st.write(description)
-        st.metric(f"Current Value ({zip_in})", f"{current_val:,.2f} {unit}")
-        st.write(f"**Impact Weight:** {std_score:.3f}")
-        st.table(pd.DataFrame({
-            "Metric": ["County Mean", "SD", "Danger Cutoff"], 
-            "Value": [f"{mean_v:,.2f}", f"{std_v:,.2f}", f"{thresh:,.2f}"]
-        }))
-
+        st.write(desc)
+        st.metric(f"ZIP {zip_in} Value", f"{local_val:,.1f} {unit}")
+        st.write(f"**Pillar Weight:** {weight:.3f} points toward the 4.0 total.")
     with c2:
-        fig, ax = plt.subplots(figsize=(10, 4))
-        # RESTORED BIN COUNTS
-        counts, bin_edges, patches = ax.hist(data, bins=bin_count, color='#bdc3c7', alpha=0.8, density=True)
-        
-        # Color Danger Zones
+        fig, ax = plt.subplots(figsize=(10, 3.5))
+        counts, bin_edges, patches = ax.hist(data, bins=bins, color='#bdc3c7', alpha=0.7, density=True)
         for i in range(len(patches)):
             mid = (bin_edges[i] + bin_edges[i+1]) / 2
             if (is_high_danger and mid > thresh) or (not is_high_danger and mid < thresh):
                 patches[i].set_facecolor('#e74c3c')
         
-        # RESTORED SD CURVE & MARKERS
-        x_axis = np.linspace(data.min(), data.max(), 500)
-        ax.plot(x_axis, norm.pdf(x_axis, mean_v, std_v), color='black', lw=2, label='Normal Distribution')
-        ax.axvline(mean_v, color='black', lw=1.5, label='County Mean')
+        x = np.linspace(data.min(), data.max(), 500)
+        ax.plot(x, norm.pdf(x, mean_v, std_v), color='black', lw=2)
+        ax.axvline(local_val, color='blue', lw=3, label=f'ZIP {zip_in}')
+        ax.axvline(mean_v, color='black', label='County Mean')
         ax.axvline(mean_v - std_v, color='gray', ls=':', label='-1 SD')
         ax.axvline(mean_v + std_v, color='gray', ls=':', label='+1 SD')
-        
-        # Current ZIP marker
-        ax.axvline(current_val, color='blue', lw=3, label=f'ZIP {zip_in}')
-        
-        ax.set_title(f"LA County {name} Context")
-        ax.legend(fontsize='x-small', ncol=2)
+        ax.legend(fontsize='xx-small', ncol=2)
         st.pyplot(fig)
 
-# Component Plots with Original Bins
-plot_component(df_ejsm, 'CIscore', 'Environmental Justice (EJSM)', 'Score', "Pollution/Vulnerability Index.", "USC", 's_e', 20, False)
+
+
+plot_pillar(df_ejsm, 'CIscore', 'Environmental Justice', 'Score', "Combines pollution and social vulnerability.", 's_e', 20, False)
 st.divider()
-plot_component(df_income, 'med_hh_income', 'Median HH Income', 'USD ($)', "Economic Need Tracking.", "Census", 's_i', 250, False)
+plot_pillar(df_income, 'med_hh_income', 'Median Income', 'USD', "Financial health metric.", 's_i', 250, False)
 st.divider()
-plot_component(df_heat, 'DegHourDay', 'Heat Burden', 'Deg-Hr Days', "Urban Heat Island Intensity.", "SCWP", 's_h', 150, True)
+plot_pillar(df_heat, 'DegHourDay', 'Heat Burden', 'Days', "Intensity of Urban Heat Island effect.", 's_h', 150, True)
 st.divider()
-plot_component(df_snap, 'SNAP_pct', 'Food Access (SNAP %)', '% Pop', "Food Insecurity Proxy.", "USDA", 's_s', 150, True)
+plot_pillar(df_snap, 'SNAP_pct', 'Food Access', '% Pop', "Percentage of households needing food assistance.", 's_s', 150, True)
