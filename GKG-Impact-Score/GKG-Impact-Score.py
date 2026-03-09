@@ -64,7 +64,8 @@ def load_all_data():
     df_heat['DegHourDay'] = pd.to_numeric(df_heat['DegHourDay'], errors='coerce')
     df_heat['GEOID10'] = df_heat['FIPS'].astype(str).str.split('.').str[0].str.zfill(11)
 
-    df_snap = pd.read_csv(f"{data_path}/Food_Deserts (1).csv")
+    # (1) Updated to use Food_Deserts_CLEAN.csv
+    df_snap = pd.read_csv(f"{data_path}/Food_Deserts_CLEAN.csv")
     df_snap.columns = df_snap.columns.str.strip()
     df_snap['TractSNAP'] = pd.to_numeric(df_snap['TractSNAP'], errors='coerce')
     df_snap['Pop2010'] = pd.to_numeric(df_snap['Pop2010'], errors='coerce')
@@ -143,7 +144,6 @@ with col_l:
     ax_sim.plot(x_range, norm.pdf(x_range, m_loc, s_loc), color='#2e86c1', lw=3)
     ax_sim.axvline(actual_score, color='#1b4f72', lw=3, label=f'Raw Calculation: {actual_score:.2f}')
     
-    # Dotted lines for Confidence bounds
     ax_sim.axvline(actual_score - s_loc, color='#e74c3c', ls=':', lw=2, label='Confidence Lower Bound')
     ax_sim.axvline(actual_score + s_loc, color='#e74c3c', ls=':', lw=2, label='Confidence Upper Bound')
     
@@ -254,7 +254,6 @@ def plot_pillar(df, col, name, unit, desc, score_key, bins, is_high_danger=True,
         st.pyplot(fig)
     st.divider()
 
-# Updated Descriptions based on detailed explanations provided
 pillars = [
     (df_ejsm, 'CIscore', 'Environmental Justice (EJSM)', 'Points', 
      "This metric evaluates environmental justice across hazard proximity, health risk, social vulnerability, and canopy cover. Adopted by LA County’s Green Zones Program, it scores tracts from 4 to 20. Areas scoring more than 1 SD below the mean (< 7.65) are identified as highest need for community green space.", 
