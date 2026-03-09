@@ -27,6 +27,13 @@ with st.expander("📖 Methodology, Data Sources & Years"):
     * **1.0** represents the highest need/impact in the county.
     * The total **Impact Score (0.0 - 4.0)** is the sum of these four pillars.
 
+    ### **Impact Score Equation**
+    The final **Impact Score** is the cumulative sum of the standardized scores ($s$) across all four pillars:
+    
+    $$Impact Score = s_{EJSM} + s_{Economic} + s_{Heat} + s_{Food}$$
+    
+    By summing these values, we identify areas where multiple vulnerabilities intersect. A location with a high score in all four categories will approach a maximum score of **4.0**, indicating an urgent priority for intervention.
+
     ### **Impact Ranges**
     - <span style="color:#2ecc71; font-weight:bold;">0.0 - 0.8 (Low Impact):</span> Healthy baseline; resilience is present.
     - <span style="color:#f1c40f; font-weight:bold;">0.8 - 1.6 (Medium Impact):</span> Emerging needs; localized vulnerabilities detected.
@@ -114,7 +121,6 @@ st.sidebar.header("📍 Search Area")
 zip_in = st.sidebar.text_input("Enter ZIP Code:", "91505")
 match = df_ziptract[df_ziptract['ZIP'] == zip_in]
 
-# DATA INTEGRITY CHECK (Rule: If match is empty OR 3/4 pillars are 0)
 ERROR_MSG = "The inputted zip code either doesn't exist within Los Angeles County or doesn't have any reliable data reported. Please try another Zipcode."
 
 if match.empty:
@@ -122,7 +128,6 @@ if match.empty:
     st.stop()
 
 target_geoid = match.iloc[0]['GEOID10']
-# Check if the GEOID exists in the combined scoring dataframe
 if target_geoid not in df_comb['GEOID10'].values:
     st.error(ERROR_MSG)
     st.stop()
@@ -130,7 +135,6 @@ if target_geoid not in df_comb['GEOID10'].values:
 idx_row = df_comb[df_comb['GEOID10'] == target_geoid].index[0]
 raw_scores = df_comb.iloc[idx_row][['s_e', 's_i', 's_h', 's_s']]
 
-# Count zeros (which indicate missing info due to the outer join/fillna logic)
 missing_info_count = (raw_scores == 0).sum()
 if missing_info_count >= 3:
     st.error(ERROR_MSG)
@@ -170,10 +174,13 @@ with col_l:
     ax_sim.plot(x_range, norm.pdf(x_range, m_loc, s_loc), color='#2e86c1', lw=3)
     ax_sim.axvline(actual_score, color='#1b4f72', lw=3, label=f'Raw Calculation: {actual_score:.2f}')
     
-    ax_sim.axvline(actual_score - s_loc, color='#e74c3c', ls=':', lw=2, label='Confidence Lower Bound')
-    ax_sim.axvline(actual_score + s_loc, color='#e74c3c', ls=':', lw=2, label='Confidence Upper Bound')
+    # Combined Legend Label for Confidence Bounds
+    ax_sim.axvline(actual_score - s_loc, color='#e74c3c', ls=':', lw=2, label='Confidence Bounds')
+    ax_sim.axvline(actual_score + s_loc, color='#e74c3c', ls=':', lw=2)
     
     ax_sim.set_title(f"Score Variance Simulation for {zip_in} (10,000 Iterations)")
+    ax_sim.set_xlabel("Impact Score")
+    ax_sim.set_ylabel("Probability Density")
     ax_sim.legend(fontsize='x-small')
     st.pyplot(fig_sim)
 
@@ -274,8 +281,13 @@ def plot_pillar(df, col, name, unit, desc, score_key, bins, is_high_danger=True,
         ax.plot(x_vals, norm.pdf(x_vals, mean_v, std_v), color='black', lw=2, label='Normal Distribution')
         
         ax.axvline(val, color='blue', lw=3, label=f'ZIP {zip_in}')
-        ax.axvline(mean_v + std_v, color='red', ls=':', lw=2, label='+1 SD')
-        ax.axvline(mean_v - std_v, color='red', ls=':', lw=2, label='-1 SD')
+        
+        # Combined Legend Label for +/- 1 SD
+        ax.axvline(mean_v + std_v, color='red', ls=':', lw=2, label='±1 SD')
+        ax.axvline(mean_v - std_v, color='red', ls=':', lw=2)
+        
+        ax.set_xlabel(f"{name} ({unit})")
+        ax.set_ylabel("Frequency Density")
         ax.legend(fontsize='xx-small', ncol=2)
         st.pyplot(fig)
     st.divider()
