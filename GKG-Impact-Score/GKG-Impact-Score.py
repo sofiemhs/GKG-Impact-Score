@@ -10,7 +10,6 @@ st.set_page_config(layout="wide", page_title="GKG Impact Dashboard")
 # --- SECTION 1: MISSION & PILLAR LOGIC ---
 st.title("🌿 Good Karma Gardens: Impact Score Analysis")
 
-# (1, 2, 3, 8) Detailed Methodology with Links and specific text
 with st.expander("📖 Methodology, Data Sources & Years"):
     st.markdown("""
     ### **The Question We Are Answering**
@@ -112,7 +111,7 @@ idx_row = df_comb[df_comb['GEOID10'] == target_geoid].index[0]
 raw_scores = df_comb.iloc[idx_row][['s_e','s_i','s_h','s_s']]
 actual_score = raw_scores.sum()
 
-# (5) Monte Carlo: 10,000 simulations
+# Monte Carlo: 10,000 simulations
 x_matrix = df_comb[['s_e','s_i','s_h','s_s']].to_numpy()
 sim_weights = np.random.uniform(0, 1, (10000, 4))
 sim_weights /= sim_weights.sum(axis=1, keepdims=True)
@@ -120,7 +119,7 @@ sim_results = np.dot(sim_weights, x_matrix.T)
 local_sims = sim_results[:, idx_row] * 4
 m_loc, s_loc = norm.fit(local_sims)
 
-# (4) Color coding logic for Impact Ranges
+# Impact Range Box
 if actual_score < 0.8: tier, color = "LOW IMPACT", "#2ecc71"
 elif 0.8 <= actual_score < 1.6: tier, color = "MEDIUM IMPACT", "#f1c40f"
 elif 1.6 <= actual_score < 2.4: tier, color = "HIGH IMPACT", "#e67e22"
@@ -128,7 +127,6 @@ else: tier, color = "EXTREME IMPACT (DANGER ZONE)", "#e74c3c"
 
 st.header("📊 Impact Score Approximation")
 
-# (4) Display Range and Color in the box
 st.markdown(f"""
 <div style="background-color:{color}; padding:20px; border-radius:15px; border: 2px solid rgba(0,0,0,0.1); margin-bottom:20px; text-align:center;">
     <p style="color:white; font-size:1.2rem; margin:0; font-weight:bold; text-transform:uppercase;">{tier}</p>
@@ -145,7 +143,7 @@ with col_l:
     ax_sim.plot(x_range, norm.pdf(x_range, m_loc, s_loc), color='#2e86c1', lw=3)
     ax_sim.axvline(actual_score, color='#1b4f72', lw=3, label=f'Raw Calculation: {actual_score:.2f}')
     
-    # (7) Dotted lines for Confidence bounds
+    # Dotted lines for Confidence bounds
     ax_sim.axvline(actual_score - s_loc, color='#e74c3c', ls=':', lw=2, label='Confidence Lower Bound')
     ax_sim.axvline(actual_score + s_loc, color='#e74c3c', ls=':', lw=2, label='Confidence Upper Bound')
     
@@ -155,7 +153,6 @@ with col_l:
 
 with col_r:
     st.subheader("Statistical Interpretation")
-    # (5, 7) Explanation of Approximation and lines
     st.markdown(f"""
     This graph analyzes the stability of the impact score using **10,000 simulations**. By randomly shifting the priority of our four pillars, we determine how certain we are about the final score. 
     
@@ -163,7 +160,6 @@ with col_r:
     - **Dotted Red Lines:** Represent the Confidence Interval. **The closer these lines are to the mean, the more certain we are of the data's precision in this location.**
     - **Standard Deviation:** A measure of "spread." A small number means the score is consistent across different weighting scenarios.
     """)
-    # (6) Removed Simulated Mean
     st.table(pd.DataFrame({
         "Metric": ["Calculated Score", "Standard Deviation (Volatility)"],
         "Value": [f"{actual_score:.3f}", f"{s_loc:.3f}"]
@@ -213,7 +209,6 @@ st.divider()
 st.header("🔍 Pillar Deep-Dive")
 
 def plot_pillar(df, col, name, unit, desc, score_key, bins, is_high_danger=True, source="", anchor_id=""):
-    # (8) Create anchor for linking
     st.markdown(f'<div id="{anchor_id}"></div>', unsafe_allow_html=True)
     sub = df[df['GEOID10'] == target_geoid]
     
@@ -242,7 +237,6 @@ def plot_pillar(df, col, name, unit, desc, score_key, bins, is_high_danger=True,
 
     with col2:
         fig, ax = plt.subplots(figsize=(10, 3.5))
-        # (9) Danger zones in Red
         counts, edges, patches = ax.hist(data, bins=bins, color='#bdc3c7', alpha=0.7, density=True)
         thresh_line = mean_v + std_v if is_high_danger else mean_v - std_v
         for i in range(len(patches)):
@@ -250,7 +244,6 @@ def plot_pillar(df, col, name, unit, desc, score_key, bins, is_high_danger=True,
             if (is_high_danger and mid > thresh_line) or (not is_high_danger and mid < thresh_line):
                 patches[i].set_facecolor('#e74c3c')
         
-        # (10) SD Curve fit
         x_vals = np.linspace(data.min(), data.max(), 100)
         ax.plot(x_vals, norm.pdf(x_vals, mean_v, std_v), color='black', lw=2, label='Normal Distribution')
         
@@ -261,12 +254,23 @@ def plot_pillar(df, col, name, unit, desc, score_key, bins, is_high_danger=True,
         st.pyplot(fig)
     st.divider()
 
-# Updated logic for anchors
+# Updated Descriptions based on detailed explanations provided
 pillars = [
-    (df_ejsm, 'CIscore', 'Environmental Justice (EJSM)', 'Points', "Communities will low Enviromental Justice score are at a higher need for increased green space", 's_e', 20, False, "SCAG / CalEnviroScreen 4.0 (2022)", "environmental-justice-ejsm"),
-    (df_income, 'med_hh_income', 'Economic Need', '$USD', "Low Income communities are often overlooked and underserved for publically accessable green spaces", 's_i', 250, False, "US Census Bureau ACS 5-Year Estimates (2021)", "economic-need"),
-    (df_heat, 'DegHourDay', 'Heat Burden', 'Days', "Urban heat is a result of lack of canopy cover and can causes dangerously high temperatures, yet gardens can limit this effect by actively cooling these areas through transpiration.", 's_h', 150, True, "NOAA Urban Heat Watch (2022)", "heat-burden"),
-    (df_snap, 'SNAP_pct', 'Food Access (SNAP)', '% Pop', "Pinpoints 'food deserts' where affordable, fresh produce is scarce. Good karma Garden's work can help to aliviate this burden.", 's_s', 150, True, "USDA Food Access Research Atlas (2019)", "food-access-snap")
+    (df_ejsm, 'CIscore', 'Environmental Justice (EJSM)', 'Points', 
+     "This metric evaluates environmental justice across hazard proximity, health risk, social vulnerability, and canopy cover. Adopted by LA County’s Green Zones Program, it scores tracts from 4 to 20. Areas scoring more than 1 SD below the mean (< 7.65) are identified as highest need for community green space.", 
+     's_e', 20, False, "USC / Occidental College / LA County (2022)", "environmental-justice-ejsm"),
+    
+    (df_income, 'med_hh_income', 'Economic Need', '$USD', 
+     "Identifies economic barriers to greening. With a county-wide mean income of $93,525, 'Danger Zones' are defined as tracts at or below $53,423. These areas are prioritized for public garden investment as they are often overlooked and underserved regarding accessible green space.", 
+     's_i', 250, False, "US Census Bureau ACS 5-Year Estimates (2021)", "economic-need"),
+    
+    (df_heat, 'DegHourDay', 'Heat Burden', 'Days', 
+     "Measures heat intensity via 'Degree Hours per day' from the Safe Clean Water Program LA. With a county median of 42.36, areas exceeding 82.61 Degree Hours are 'Danger Zones.' Gardens mitigate this by actively cooling these areas through transpiration.", 
+     's_h', 150, True, "Safe Clean Water Program LA (2022)", "heat-burden"),
+    
+    (df_snap, 'SNAP_pct', 'Food Access (SNAP)', '% Pop', 
+     "Calculated as (SNAP Participants / Total Population) * 100. After removing missing data, the county mean is 3.15%. 'Danger Zones' exceed 5.52% participation, pinpointing 'food deserts' where gardens alleviate the burden of scarce fresh produce.", 
+     's_s', 150, True, "USDA Food Access Research Atlas (2019)", "food-access-snap")
 ]
 
 for p in sorted(pillars, key=lambda x: raw_scores[x[5]], reverse=True):
