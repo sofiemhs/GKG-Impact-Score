@@ -13,13 +13,13 @@ st.title("🌿 Good Karma Gardens: Impact Score Analysis")
 with st.expander("📖 Methodology, Data Sources & Years"):
     st.markdown("""
     ### **The Question We Are Answering**
-    "What impact are Good Karma Gardens work converting space into gardens having based on location?"
+    "What impact does Good Karma Gardens' work have when converting spaces into gardens based on their location?"
 
     ### **Why Each Pillar Matters**
-    * **[Environmental Justice (EJSM)](#environmental-justice-ejsm):** Communities with low Environmental Justice scores are at a higher need for increased green space.
-    * **[Economic Need](#economic-need):** Low Income communities are often overlooked and underserved for publicly accessible green spaces.
-    * **[Heat Burden](#heat-burden):** Urban heat is a result of lack of canopy cover and can cause dangerously high temperatures, yet gardens can limit this effect by actively cooling these areas through transpiration.
-    * **[Food Access (SNAP)](#food-access-snap):** Pinpoints 'food deserts' where affordable, fresh produce is scarce. Good Karma Garden's work can help to alleviate this burden.
+    * **[Environmental Justice (EJSM)](#environmental-justice-ejsm):** Communities with low Environmental Justice scores have a higher need for increased green space.
+    * **[Economic Need](#economic-need):** Low-income communities are often overlooked and underserved regarding publicly accessible green spaces.
+    * **[Heat Burden](#heat-burden):** Urban heat is a result of a lack of canopy cover and can cause dangerously high temperatures. Gardens limit this effect by actively cooling areas through transpiration.
+    * **[Food Access (SNAP)](#food-access-snap):** Pinpoints 'food deserts' where affordable, fresh produce is scarce. Good Karma Gardens' work helps to alleviate this burden.
 
     ### **Standardization Logic**
     Every raw data point (dollars, degrees, or percentages) is standardized on a scale of **0.0 to 1.0**. 
@@ -28,7 +28,7 @@ with st.expander("📖 Methodology, Data Sources & Years"):
     * The total **Impact Score (0.0 - 4.0)** is the sum of these four pillars.
 
     ### **Impact Ranges**
-    - <span style="color:#2ecc71; font-weight:bold;">0.0 - 0.8 (Low Impact):</span> Healthy baseline; baseline resilience present.
+    - <span style="color:#2ecc71; font-weight:bold;">0.0 - 0.8 (Low Impact):</span> Healthy baseline; resilience is present.
     - <span style="color:#f1c40f; font-weight:bold;">0.8 - 1.6 (Medium Impact):</span> Emerging needs; localized vulnerabilities detected.
     - <span style="color:#e67e22; font-weight:bold;">1.6 - 2.4 (High Impact):</span> Significant need; multi-factor vulnerabilities present.
     - <span style="color:#e74c3c; font-weight:bold;">2.4 - 4.0 (Extreme Impact):</span> **Danger Zone**; critical intersection of pollution, poverty, and climate risk.
@@ -72,7 +72,7 @@ def load_all_data():
     
     def format_geoid(x):
         s = str(x).split('.')[0].strip()
-        if len(s) <= 7: # It's a 6-digit tract, add CA (06) + LA (037)
+        if len(s) <= 7: # It's a 6-digit tract; add CA (06) + LA (037)
             return "06037" + s.zfill(6)
         return s.zfill(11)
 
@@ -97,6 +97,7 @@ def load_all_data():
     df_heat['s'] = std(df_heat, 'DegHourDay')
     df_snap['s'] = std(df_snap, 'SNAP_pct')
 
+    # Merge all into master set
     df_comb = df_ejsm[['GEOID10','s']].merge(df_income[['GEOID10','s']], on='GEOID10', how='outer', suffixes=('_e','_i')) \
               .merge(df_heat[['GEOID10','s']], on='GEOID10', how='outer') \
               .merge(df_snap[['GEOID10','s']], on='GEOID10', how='outer', suffixes=('_h','_s')).fillna(0)
@@ -113,13 +114,28 @@ st.sidebar.header("📍 Search Area")
 zip_in = st.sidebar.text_input("Enter ZIP Code:", "91505")
 match = df_ziptract[df_ziptract['ZIP'] == zip_in]
 
+# DATA INTEGRITY CHECK (Rule: If match is empty OR 3/4 pillars are 0)
+ERROR_MSG = "The inputted zip code either doesn't exist within Los Angeles County or doesn't have any reliable data reported. Please try another Zipcode."
+
 if match.empty:
-    st.error("ZIP Code not found.")
+    st.error(ERROR_MSG)
     st.stop()
 
 target_geoid = match.iloc[0]['GEOID10']
+# Check if the GEOID exists in the combined scoring dataframe
+if target_geoid not in df_comb['GEOID10'].values:
+    st.error(ERROR_MSG)
+    st.stop()
+
 idx_row = df_comb[df_comb['GEOID10'] == target_geoid].index[0]
 raw_scores = df_comb.iloc[idx_row][['s_e', 's_i', 's_h', 's_s']]
+
+# Count zeros (which indicate missing info due to the outer join/fillna logic)
+missing_info_count = (raw_scores == 0).sum()
+if missing_info_count >= 3:
+    st.error(ERROR_MSG)
+    st.stop()
+
 actual_score = raw_scores.sum()
 
 # Monte Carlo: 10,000 simulations
@@ -130,7 +146,7 @@ sim_results = np.dot(sim_weights, x_matrix.T)
 local_sims = sim_results[:, idx_row] * 4
 m_loc, s_loc = norm.fit(local_sims)
 
-# Impact Range Box
+# Impact Range Logic
 if actual_score < 0.8: tier, color = "LOW IMPACT", "#2ecc71"
 elif 0.8 <= actual_score < 1.6: tier, color = "MEDIUM IMPACT", "#f1c40f"
 elif 1.6 <= actual_score < 2.4: tier, color = "HIGH IMPACT", "#e67e22"
@@ -164,11 +180,11 @@ with col_l:
 with col_r:
     st.subheader("Statistical Interpretation")
     st.markdown(f"""
-    This graph analyzes the stability of the impact score using **10,000 simulations**. By randomly shifting the priority of our four pillars, we determine how certain we are about the final score. 
+    This graph analyzes the stability of the impact score using **10,000 simulations**. By randomly shifting the priority of our four pillars, we determine the certainty of the final score. 
     
     - **Blue Line:** The theoretical distribution of scores.
     - **Dotted Red Lines:** Represent the Confidence Interval. **The closer these lines are to the mean, the more certain we are of the data's precision in this location.**
-    - **Standard Deviation:** A measure of "spread." A small number means the score is consistent across different weighting scenarios.
+    - **Standard Deviation:** A measure of "spread." A small number indicates the score remains consistent across different weighting scenarios.
     """)
     st.table(pd.DataFrame({
         "Metric": ["Calculated Score", "Standard Deviation (Volatility)"],
@@ -182,8 +198,8 @@ st.divider()
 st.header("🌎 County-Wide Impact Ranking")
 
 st.markdown("""
-This plot ranks every single Census Tract in Los Angeles County from **Lowest Need (Left)** to **Highest Need (Right)**.
-The blue shaded area represents the 'Average' middle 50% of the county. Areas to the far right are the priority zones for Good Karma Gardens.
+This plot ranks every Census Tract in Los Angeles County from **Lowest Need (Left)** to **Highest Need (Right)**.
+The blue shaded area represents the 'Average' middle 50% of the county. Areas to the far right are priority zones for Good Karma Gardens.
 """)
 
 medians = np.median(sim_results, axis=0)
@@ -206,11 +222,11 @@ st.pyplot(fig_cdf)
 
 percentile = (medians < medians[idx_row]).mean() * 100
 if percentile > 75:
-    st.warning(f"📍 **ZIP {zip_in}** is in the top **{100-percentile:.1f}%** of high-need areas in the county. It is significantly higher than most of LA.")
+    st.warning(f"📍 **ZIP {zip_in}** is in the top **{100-percentile:.1f}%** of high-need areas in the county. Its need is significantly higher than most of LA.")
 elif percentile < 25:
-    st.success(f"📍 **ZIP {zip_in}** is in the bottom **{percentile:.1f}%** of need areas. It is lower than most of the county.")
+    st.success(f"📍 **ZIP {zip_in}** is in the bottom **{percentile:.1f}%** of need areas. Its need is lower than most of the county.")
 else:
-    st.info(f"📍 **ZIP {zip_in}** is in the middle range, higher than **{percentile:.1f}%** of LA tracts.")
+    st.info(f"📍 **ZIP {zip_in}** is in the middle range, with a higher need than **{percentile:.1f}%** of LA tracts.")
 
 # ----------------------------
 # 4. PILLAR DEEP-DIVE
@@ -241,9 +257,9 @@ def plot_pillar(df, col, name, unit, desc, score_key, bins, is_high_danger=True,
         
         thresh = mean_v + std_v if is_high_danger else mean_v - std_v
         if (is_high_danger and val > thresh) or (not is_high_danger and val < thresh):
-            st.error("🚨 **DANGER ZONE:** Metric exceeds critical threshold.")
+            st.error("🚨 **DANGER ZONE:** This metric exceeds the critical threshold.")
         else:
-            st.success("✅ **NORMAL RANGE:** Metric is within acceptable bounds.")
+            st.success("✅ **NORMAL RANGE:** This metric is within acceptable bounds.")
 
     with col2:
         fig, ax = plt.subplots(figsize=(10, 3.5))
@@ -266,19 +282,19 @@ def plot_pillar(df, col, name, unit, desc, score_key, bins, is_high_danger=True,
 
 pillars = [
     (df_ejsm, 'CIscore', 'Environmental Justice (EJSM)', 'Points', 
-     "This metric evaluates environmental justice across hazard proximity, health risk, social vulnerability, and canopy cover. Adopted by LA County’s Green Zones Program, it scores tracts from 4 to 20. Areas scoring more than 1 SD below the mean (< 7.65) are identified as highest need for community green space.", 
+     "This metric evaluates environmental justice across hazard proximity, health risk, social vulnerability, and canopy cover. Scores range from 4 to 20. Areas scoring more than 1 SD below the mean (< 7.65) are identified as having the highest need for community green space.", 
      's_e', 20, False, "USC / Occidental College / LA County (2022)", "environmental-justice-ejsm"),
     
     (df_income, 'med_hh_income', 'Economic Need', '$USD', 
-     "Identifies economic barriers to greening. With a county-wide mean income of $93,525, 'Danger Zones' are defined as tracts at or below $53,423. These areas are prioritized for public garden investment as they are often overlooked and underserved regarding accessible green space.", 
+     "Identifies economic barriers to greening. With a county-wide mean income of $93,525, 'Danger Zones' are defined as tracts at or below $53,423. These areas are prioritized for garden investment as they are often underserved.", 
      's_i', 250, False, "US Census Bureau ACS 5-Year Estimates (2021)", "economic-need"),
     
     (df_heat, 'DegHourDay', 'Heat Burden', 'Days', 
-     "Measures heat intensity via 'Degree Hours per day' from the Safe Clean Water Program LA. With a county median of 42.36, areas exceeding 82.61 Degree Hours are 'Danger Zones.' Gardens mitigate this by actively cooling these areas through transpiration.", 
+     "Measures heat intensity via 'Degree Hours per day.' With a county median of 42.36, areas exceeding 82.61 Degree Hours are 'Danger Zones.' Gardens mitigate this by actively cooling these areas through transpiration.", 
      's_h', 150, True, "Safe Clean Water Program LA (2022)", "heat-burden"),
     
     (df_snap, 'SNAP_pct', 'Food Access (SNAP)', '% Pop', 
-     "Calculated as (SNAP Participants / Total Population) * 100. After removing missing data, the county mean is 3.15%. 'Danger Zones' exceed 5.52% participation, pinpointing 'food deserts' where gardens alleviate the burden of scarce fresh produce.", 
+     "Calculated as (SNAP Participants / Total Population) * 100. The county mean is 3.15%. 'Danger Zones' exceed 5.52% participation, pinpointing 'food deserts' where gardens alleviate the burden of scarce fresh produce.", 
      's_s', 150, True, "USDA Food Access Research Atlas (2019)", "food-access-snap")
 ]
 
