@@ -11,7 +11,7 @@ st.set_page_config(layout="wide", page_title="GKG Impact Dashboard")
 # (Adjust weights here to update the entire dashboard)
 w_e = 1.0  # Environmental Justice (EJSM)
 w_i = 1.0  # Median Household Income
-w_h = 0.0  # Heat Burden (Temperature)
+w_h = 0.1  # Heat Burden (Temperature)
 w_s = 1.0  # Food Access (SNAP)
 weights_list = [w_e, w_i, w_h, w_s]
 
@@ -380,6 +380,7 @@ with col_m2:
     else:
         st.info("Map not found at specified path.")
     st.caption("Identifies underserved low-income tracts across the county.")
+
 
 
 
