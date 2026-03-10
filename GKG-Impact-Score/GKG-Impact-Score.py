@@ -17,39 +17,34 @@ weights_list = [w_e, w_i, w_h, w_s]
 # --- SECTION 1: MISSION & PILLAR LOGIC ---
 st.title("🌿 Good Karma Gardens: Impact Score Analysis")
 
-with st.expander("📖 Definitions and Glossary"):
+with st.expander("📖 Project Definitions and Glossary"):
     st.markdown("""
     ### **Key Terms**
-    * **Pillar Score Contribution:** The individual standardized score (0.0 to 1.0) of a category after weight application[cite: 544].
-    * **% of Total Impact Score:** The influence a single pillar has on the final 4.0 score.
-    * **Standardization:** Scaling raw data (dollars, degrees, or percentages) to a uniform 0.0 to 1.0 range using Min and Max values[cite: 544].
-    * **Danger Zone:** Census tracts identified as having the highest need, typically defined as being more than one standard deviation (1 SD) beyond the mean[cite: 444, 472, 530].
+    * **Impact Index:** A weighted standardization of environmental and socioeconomic factors used to estimate the relative impact of garden projects in neighborhoods[cite: 232].
+    * **Danger Zone:** Census tracts classified as having the highest need, representing areas with lower access to environmental resources or higher socioeconomic vulnerability[cite: 234].
+    * **Standardization:** The process of scaling measured factors (Min to Max) down to a uniform 0.0 to 1.0 range to allow for integrated weighting[cite: 605].
+    * **Monte Carlo Simulation:** A statistical technique used to assess the stability of our model by running 10,000 iterations with random weighting coefficients[cite: 240, 610].
     """)
 
-with st.expander("📝 Methodology, Data Sources and Years"):
+with st.expander("📝 Methodology, Data Sources and Research"):
     st.markdown(fr"""
-    ### **The Research Question**
-    "What impact are Good Karma Gardens (GKG) builds having?"[cite: 417]. This dashboard identifies areas where community gardens would provide the most significant benefit by analyzing where socio-economic and environmental stressors overlap[cite: 418, 420].
+    ### **Research Question**
+    "What impact are Good Karma Gardens (GKG) builds having?"[cite: 562]. This dashboard identifies regions across Los Angeles County where additional green spaces provide the greatest social, economic, and environmental impact[cite: 437].
 
-    ### **Why Each Pillar Matters**
-    * **Environmental Justice (EJSM):** Evaluates environmental justice across hazard proximity, health risk, social/health vulnerability, and climate change vulnerability (tree canopy)[cite: 433, 434, 440, 441].
-    * **Median Household Income:** Lower income tracts often lack private green space; this tool identifies communities with the highest financial barriers to garden access[cite: 462, 629].
-    * **Urban Heat:** Measured in **Degree Hours per day**, identifying areas where air temperature frequently exceeds 80°F, highlighting a lack of cooling canopy cover[cite: 522, 523, 530].
-    * **Food Access (SNAP):** Pinpoints areas with high SNAP participation rates, identifying "food deserts" where affordable, fresh produce is scarce[cite: 468, 472].
+    ### **The Four Pillars of Impact**
+    * **Environmental Justice (EJSM):** Evaluates hazard proximity, health risk, social/health vulnerability, and climate change vulnerability (tree canopy coverage)[cite: 575].
+    * **Median Household Income:** Identifies higher-priority zones for investment where income falls below the county mean[cite: 389].
+    * **Urban Heat (Degree Hours):** Measures cumulative heat exposure (degrees above 80°F) to identify zones where green space could provide cooling benefits[cite: 392, 599].
+    * **Food Access (SNAP):** Tracks tracts where high SNAP participation indicates a need for green spaces that support food access and community resilience[cite: 391].
 
-    ### **Standardization & Math**
-    We scaled all measured factors to a range of **0.0 to 1.0**[cite: 544]. To account for variability in subjective weighting, we utilized a **Monte Carlo simulation** with 10,000 iterations to find the possible error for our equation[cite: 546, 549].
-    
-    **Impact Score Equation:**
-    $$Impact Score = 4 \times \frac{{\sum (w_{{i}} \times s_{{i}})}}{{\sum w_{{i}}}}$$
-    
-    **Simulation Statistics:**
-    * **Mean Standard Deviation:** 0.0465 [cite: 550]
-    * **Mean Standard Error:** 0.000465 [cite: 550]
+    ### **Robustness Index (RI)**
+    To ensure our findings are reliable, we conducted a **Monte Carlo simulation** using 10,000 iterations to account for uncertainty in indicator weighting[cite: 394, 610].
+    * **Mean Standard Deviation:** 0.0465 
+    * **Mean Standard Error:** 0.000465 
     """, unsafe_allow_html=True)
 
 # ----------------------------
-# 1. Data Loading 
+# 1. Robust Data Loading 
 # ----------------------------
 
 @st.cache_data
@@ -58,46 +53,53 @@ def load_all_data():
     data_path = None
     for p in possible_paths:
         if os.path.exists(p): data_path = p; break
-    
     if data_path is None: raise FileNotFoundError("Data folder not found.")
 
-    # 1. EJSM - Adopted by LA County Green Zones Program [cite: 433]
-    df_ejsm = pd.read_csv(f"{data_path}/EJSM_Origonal.csv")
+    def smart_load(filename):
+        path = f"{data_path}/{filename}"
+        # Fixing BadZipFile error: try reading as CSV if Excel fails
+        try:
+            return pd.read_excel(path, engine='openpyxl')
+        except Exception:
+            try: return pd.read_csv(path)
+            except: raise Exception(f"Could not read {filename} as Excel or CSV.")
+
+    # 1. EJSM (USC/Occidental College/LA County 2022) [cite: 575]
+    df_ejsm = smart_load("EJSM_Origonal.csv")
     df_ejsm.columns = df_ejsm.columns.str.strip()
     df_ejsm['GEOID10'] = df_ejsm['Tract_1'].astype(str).str.split('.').str[0].str.zfill(11)
     df_ejsm['CIscore'] = pd.to_numeric(df_ejsm['CIscore'], errors='coerce')
     df_ejsm = df_ejsm.dropna(subset=['CIscore'])
 
-    # 2. Income - Mean: $93,525.12 [cite: 464]
-    df_income = pd.read_csv(f"{data_path}/Income_original.csv")
+    # 2. Income (ACS 5-Year Estimates) [cite: 283]
+    df_income = smart_load("Income_original.csv")
     df_income['med_hh_income'] = pd.to_numeric(df_income['med_hh_income'].astype(str).str.replace('%','').str.replace(',',''), errors='coerce')
     df_income = df_income[df_income['med_hh_income'].notna() & (df_income['med_hh_income'] != 0)]
     df_income['GEOID10'] = df_income['tract'].astype(str).str.split('.').str[0].str.zfill(11)
 
-    # 3. Heat - Safe Clean Water Program LA [cite: 522]
-    df_heat = pd.read_csv(f"{data_path}/DegHourDays_Original.csv")
+    # 3. Heat (Safe Clean Water Program LA) [cite: 283, 599]
+    df_heat = smart_load("DegHourDays_Original.csv")
     df_heat.columns = df_heat.columns.str.strip()
     df_heat['DegHourDay'] = pd.to_numeric(df_heat['DegHourDay'], errors='coerce')
     df_heat['GEOID10'] = df_heat['FIPS'].astype(str).str.split('.').str[0].str.zfill(11)
 
-    # 4. Food Access - SNAP [cite: 468]
-    df_snap = pd.read_csv(f"{data_path}/Food_Deserts_CLEAN.csv")
+    # 4. Food Access (SNAP/USDA) [cite: 283]
+    df_snap = smart_load("Food_Deserts_CLEAN.csv")
     df_snap.columns = df_snap.columns.str.strip()
     def format_geoid(x):
         s = str(x).split('.')[0].strip()
         if len(s) <= 7: return "06037" + s.zfill(6)
         return s.zfill(11)
     df_snap['GEOID10'] = df_snap['CT10'].apply(format_geoid)
-    df_snap['TractSNAP'] = pd.to_numeric(df_snap['TractSNAP'], errors='coerce')
-    df_snap['Pop2010'] = pd.to_numeric(df_snap['Pop2010'], errors='coerce')
-    df_snap = df_snap[(df_snap['Pop2010'] > 0)].dropna(subset=['TractSNAP'])
-    df_snap['SNAP_pct'] = (df_snap['TractSNAP'] / df_snap['Pop2010']) * 100
+    df_snap['SNAP_pct'] = (pd.to_numeric(df_snap['TractSNAP'], errors='coerce') / pd.to_numeric(df_snap['Pop2010'], errors='coerce')) * 100
+    df_snap = df_snap.dropna(subset=['SNAP_pct'])
 
-    # 5. Zip Crosswalk
-    df_ziptract = pd.read_excel(f"{data_path}/ZIP_TRACT_122025.xlsx", engine='openpyxl')
+    # 5. Zip-to-Tract Crosswalk
+    df_ziptract = smart_load("ZIP_TRACT_122025.xlsx")
     df_ziptract['ZIP'] = df_ziptract['ZIP'].astype(str).str.zfill(5)
     df_ziptract['GEOID10'] = df_ziptract['TRACT'].astype(str).str.split('.').str[0].str.zfill(11)
 
+    # Standardization (0.0 to 1.0) [cite: 605]
     def std(df, col, inv=False):
         s = (df[col] - df[col].min()) / (df[col].max() - df[col].min())
         return 1 - s if inv else s
@@ -116,97 +118,100 @@ def load_all_data():
 df_ejsm, df_income, df_heat, df_snap, df_ziptract, df_comb = load_all_data()
 
 # ----------------------------
-# 2. LOCAL ANALYSIS
+# 2. LOCAL IMPACT ANALYSIS
 # ----------------------------
 
-st.sidebar.header("📍 Search Area")
+st.sidebar.header("📍 Strategic Prioritization")
 zip_in = st.sidebar.text_input("Enter ZIP Code in LA County:", "91505")
 match = df_ziptract[df_ziptract['ZIP'] == zip_in]
 
-ERROR_MSG = "The ZIP Code either does not exist in LA County or data is missing. Please try another."
-
 if match.empty:
-    st.error(ERROR_MSG); st.stop()
+    st.error("ZIP Code not found in LA County datasets."); st.stop()
 
 target_geoid = match.iloc[0]['GEOID10']
-if target_geoid not in df_comb['GEOID10'].values:
-    st.error(ERROR_MSG); st.stop()
-
 idx_row = df_comb[df_comb['GEOID10'] == target_geoid].index[0]
 raw_scores = df_comb.iloc[idx_row][['s_e', 's_i', 's_h', 's_s']]
+actual_score = 4 * (np.dot(raw_scores.values, weights_list)) / sum(weights_list)
 
-actual_score = 4 * ( (raw_scores['s_e'] * w_e) + (raw_scores['s_i'] * w_i) + (raw_scores['s_h'] * w_h) + (raw_scores['s_s'] * w_s) ) / sum(weights_list)
-
-# Tier Logic based on overall need [cite: 421]
+# Tier Logic [cite: 415]
 if actual_score < 1.0: tier, color = "LOW IMPACT", "#2ecc71"
-elif 1.0 <= actual_score < 2.0: tier, color = "MEDIUM IMPACT", "#f1c40f"
-elif 2.0 <= actual_score < 3.0: tier, color = "HIGH IMPACT", "#e67e22"
+elif 1.0 <= actual_score < 2.5: tier, color = "MEDIUM IMPACT", "#f1c40f"
+elif 2.5 <= actual_score < 3.2: tier, color = "HIGH IMPACT", "#e67e22"
 else: tier, color = "EXTREME IMPACT (DANGER ZONE)", "#e74c3c"
 
-st.header("📊 Impact Score Approximation")
-
+st.header("📊 Estimated Impact Score")
 st.markdown(f"""
-<div style="background-color:{color}; padding:20px; border-radius:15px; text-align:center;">
-    <p style="color:white; font-size:1.2rem; margin:0; font-weight:bold;">{tier}</p>
-    <h1 style="color:white; font-size:5rem; margin:0;">{actual_score:.2f}</h1>
-    <p style="color:white; font-weight:bold;">Estimated Impact for ZIP {zip_in}</p>
+<div style="background-color:{color}; padding:25px; border-radius:15px; text-align:center;">
+    <p style="color:white; font-size:1.3rem; margin:0; font-weight:bold;">{tier}</p>
+    <h1 style="color:white; font-size:5.5rem; margin:0;">{actual_score:.2f}</h1>
+    <p style="color:white; font-weight:bold;">Calculated Benefit for ZIP {zip_in}</p>
 </div>
 """, unsafe_allow_html=True)
 
 # ----------------------------
-# 3. PILLAR DEEP DIVE
+# 3. PILLAR DEEP DIVE (DANGER ZONES)
 # ----------------------------
 st.divider()
-st.header("🔍 Pillar Deep Dive")
+st.header("🔍 Indicator Danger Zones")
 
-def plot_pillar(df, col, name, unit, desc, score_key, bins, weight, thresh_val, is_high_bad=True, source="", calc_expl=""):
+def plot_pillar(df, col, name, unit, score_key, thresh_val, is_high_bad=True, source="", calc=""):
     sub = df[df['GEOID10'] == target_geoid]
     if sub.empty: return
 
     val = sub[col].values[0]
     std_val = raw_scores[score_key]
-    data = df[col].dropna()
     
     col1, col2 = st.columns([1, 2])
     with col1:
         st.subheader(name)
-        st.markdown(f"**Data Source:** {source}")
-        st.markdown(f"**Calculation:** {calc_expl}")
-        st.metric(f"Raw Value", f"{val:,.1f} {unit}")
-        st.metric("Pillar Score", f"{std_val:.3f} / 1.0")
+        st.markdown(f"**Source:** {source}")
+        st.markdown(f"**Calculation:** {calc}")
+        st.metric("Raw Value", f"{val:,.1f} {unit}")
+        st.metric("Standardized (0-1)", f"{std_val:.3f}")
 
-        if (is_high_bad and val > thresh_val) or (not is_high_bad and val < thresh_val):
-            st.error(f"🚨 **DANGER ZONE:** This tract is beyond the threshold of {thresh_val} {unit}[cite: 444].")
+        # Danger Zone Logic [cite: 578, 584, 590, 603]
+        is_danger = (is_high_bad and val > thresh_val) or (not is_high_bad and val < thresh_val)
+        if is_danger:
+            st.error(f"🚨 **DANGER ZONE:** This area is beyond the project threshold of {thresh_val} {unit}.")
         else:
-            st.success("✅ **STABLE:** This metric is within the county average range.")
+            st.success("✅ **STABLE:** This area is within the county average range.")
 
     with col2:
         fig, ax = plt.subplots(figsize=(10, 3))
-        ax.hist(data, bins=bins, color='#bdc3c7', alpha=0.7)
+        ax.hist(df[col].dropna(), bins=50, color='#bdc3c7', alpha=0.6)
         ax.axvline(val, color='blue', lw=3, label=f'ZIP {zip_in}')
         ax.axvline(thresh_val, color='red', ls=':', lw=2, label='Danger Threshold')
         ax.set_xlabel(unit); ax.legend(fontsize='x-small')
         st.pyplot(fig)
     st.divider()
 
-# Thresholds from Project Report [cite: 444, 464, 472, 530]
+# Pillars from Deliverables [cite: 575, 584, 590, 603]
 pillars = [
-    (df_ejsm, 'CIscore', 'Environmental Justice (EJSM)', 'Points', 
-     "Evaluates hazard and vulnerability[cite: 433].", 's_e', 20, w_e, 7.65, False, 
-     "USC / Occidental College (2022)", "Standardized 4-20 scale[cite: 442]."),
-    
-    (df_income, 'med_hh_income', 'Median Household Income', '$USD', 
-     "Identifies underserved communities[cite: 462].", 's_i', 100, w_i, 53423.09, False, 
-     "US Census Bureau", "Inverted; lower income = higher need[cite: 464]."),
-    
-    (df_heat, 'DegHourDay', 'Heat Burden', 'Degree Hours', 
-     "Excess heat above 80°F[cite: 522].", 's_h', 50, w_h, 82.61, True, 
-     "Safe Clean Water Program LA", "Median: 42.36[cite: 525, 530]."),
-    
-    (df_snap, 'SNAP_pct', 'Food Access (SNAP)', '% Pop', 
-     "Identifies 'food deserts'[cite: 468].", 's_s', 50, w_s, 5.52, True, 
-     "USDA Food Access Research Atlas", "Mean usage rate: 3.15%[cite: 471, 472].")
+    (df_ejsm, 'CIscore', 'Environmental Justice (EJSM)', 'Points', 's_e', 7.65, False, "USC/Occidental/LA County (2022)", "Hazard, Health, Social, Canopy [cite: 575]"),
+    (df_income, 'med_hh_income', 'Median Household Income', '$USD', 's_i', 53423.09, False, "US Census Bureau", "Inverted scale: lower = higher impact [cite: 694]"),
+    (df_heat, 'DegHourDay', 'Urban Heat Burden', 'Degree Hours', 's_h', 82.61, True, "SCWP LA", "Cumulative degrees above 80°F [cite: 599]"),
+    (df_snap, 'SNAP_pct', 'Food Access (SNAP)', '% Pop', 's_s', 5.52, True, "USDA/Census", "SNAP participation rate [cite: 590]")
 ]
 
 for p in pillars:
-    plot_pillar(p[0], p[1], p[2], p[3], p[4], p[5], p[6], p[7], p[8], is_high_bad=p[9], source=p[10], calc_expl=p[11])
+    plot_pillar(p[0], p[1], p[2], p[3], p[4], p[5], is_high_bad=p[6], source=p[7], calc=p[8])
+
+# ----------------------------
+# 4. WATER USAGE TOOL (SKELETON) [cite: 617, 630]
+# ----------------------------
+st.header("💧 Water Usage Dashboard")
+st.markdown("""
+This tool estimates the annual water and cost savings when conventional lawns are replaced with California native plants[cite: 244, 396].
+""")
+
+sq_ft = st.number_input("Enter square footage of lawn to convert:", min_value=0, value=500)
+plant_type = st.selectbox("Select Native Plant Type:", ["Shrub", "Ground Cover", "Vine", "Bulb", "Succulent"])
+
+# Methodology: ETC = ETo * Plant Factor [cite: 623]
+eto = 48.34  # Annual Reference Evapotranspiration for Santa Monica [cite: 623]
+pf_map = {"Shrub": 0.2, "Ground Cover": 0.2, "Vine": 0.2, "Bulb": 0.2, "Succulent": 0.05} # [cite: 622]
+lawn_pf = 0.8  # Standard ornamental lawn factor
+
+gallons_saved = (sq_ft * (eto * lawn_pf) * 0.623) - (sq_ft * (eto * pf_map[plant_type]) * 0.623)
+st.metric("Estimated Annual Water Saved", f"{gallons_saved:,.0f} Gallons")
+st.caption("Calculated using WUCOLS and CIMIS Santa Monica 2024 data[cite: 623].")
