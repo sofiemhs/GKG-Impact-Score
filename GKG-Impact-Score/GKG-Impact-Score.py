@@ -142,7 +142,27 @@ if missing_info_count >= 3:
     st.stop()
 
 # --- CUSTOM WEIGHING ADJUSTMENT ---
-actual_score = raw_scores['s_s'] + raw_scores['s_e'] + raw_scores['s_i'] + raw_scores['s_h']
+# Variable Key for Weighting:
+# s_e = Environmental Justice (EJSM)
+# s_i = Median Household Income
+# s_h = Heat Burden (Temperature)
+# s_s = Food Access (SNAP)
+#
+# HOW TO WEIGHT: 
+# To weight a pillar, multiply its specific variable below by your desired factor.
+#
+# Example 1: To have each pillar weighted equally 
+# actual_score = raw_scores['s_s']  + raw_scores['s_e'] + raw_scores['s_i'] + raw_scores['s_h']
+# 
+# Example 1: To make Food Access (SNAP) twice as important as everything else:
+# actual_score = (raw_scores['s_s'] * 2.0) + raw_scores['s_e'] + raw_scores['s_i'] + raw_scores['s_h']
+#
+# Example 2: To make everything ELSE twice as important as Food Access (SNAP):
+# actual_score = raw_scores['s_s'] + (raw_scores['s_e'] * 2.0) + (raw_scores['s_i'] * 2.0) + (raw_scores['s_h'] * 2.0)
+#
+# Example 3: Original Heat Burden example (Heat twice as important):
+# actual_score = (raw_scores['s_h'] * 2.0) + raw_scores['s_e'] + raw_scores['s_i'] + raw_scores['s_s']
+actual_score = (raw_scores['s_s']*2) + raw_scores['s_e'] + raw_scores['s_i'] + raw_scores['s_h']
 
 # Monte Carlo: 10,000 simulations
 x_matrix = df_comb[['s_e', 's_i', 's_h', 's_s']].to_numpy()
@@ -358,3 +378,4 @@ with col_m2:
     else:
         st.info("Map not found at specified path.")
     st.caption("Identifies underserved low-income tracts across the county.")
+
