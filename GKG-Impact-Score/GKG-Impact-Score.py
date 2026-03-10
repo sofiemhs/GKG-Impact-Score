@@ -8,7 +8,6 @@ import os
 st.set_page_config(layout="wide", page_title="GKG Impact Dashboard")
 
 # --- SECTION 0: GLOBAL WEIGHT CONFIGURATION ---
-# (Adjust weights here to update the entire dashboard)
 w_e = 1.0  # Environmental Justice (EJSM)
 w_i = 1.0  # Median Household Income
 w_h = 1.0  # Heat Burden (Temperature)
@@ -18,26 +17,34 @@ weights_list = [w_e, w_i, w_h, w_s]
 # --- SECTION 1: MISSION & PILLAR LOGIC ---
 st.title("🌿 Good Karma Gardens: Impact Score Analysis")
 
-with st.expander("📖 Methodology, Data Sources & Years"):
-    # Using fr""" (Raw Formatted String) to handle LaTeX backslashes and variables
-    # Literal LaTeX braces are doubled {{ }} to avoid NameErrors.
+# New Definition Section
+with st.expander("📖 Glossary of Terms and Definitions"):
+    st.markdown("""
+    * **Pillar Score Contribution:** This represents the individual impact of a single category (like Heat or Income). It is the standardized score (0.0 to 1.0) multiplied by the weight assigned to that category.
+    * **% of Total Impact Score:** This shows how much a specific pillar is "driving" the final score. For example, if a ZIP Code has a very high Heat Burden but low Food Access, the Heat Burden will represent a larger percentage of the total 4.0 score.
+    * **Standardization:** The process of taking different units (dollars, degrees, or percentages) and mapping them onto a uniform 0.0 to 1.0 scale so they can be compared fairly.
+    * **Confidence Bounds:** The range in which the score is likely to fall if we slightly change how much we prioritize one pillar over another.
+    * **Standard Deviation (SD):** A statistical measure of how far a value is from the average. We use this to define the "Danger Zone" boundaries.
+    """)
+
+with st.expander("📝 Methodology, Data Sources and Years"):
     st.markdown(fr"""
     ### **The Question We Are Answering**
     "What impact does Good Karma Gardens' work have when converting spaces into gardens based on their location?"
 
     ### **Why Each Pillar Matters**
     * **[Environmental Justice (EJSM)](#environmental-justice-ejsm):** Communities with low Environmental Justice scores have a higher need for increased green space.
-    * **[Median Household Income](#median-household-income):** Low-income communities are often overlooked and underserved regarding publicly accessible green spaces.
+    * **[Median Household Income](#median-household-income):** Low income communities are often overlooked and underserved regarding publicly accessible green spaces.
     * **[Heat Burden](#heat-burden):** Urban heat is a result of a lack of canopy cover and can cause dangerously high temperatures. Gardens limit this effect by actively cooling areas through transpiration.
     * **[Food Access (SNAP)](#food-access-snap):** Pinpoints 'food deserts' where affordable, fresh produce is scarce. Good Karma Gardens' work helps to alleviate this burden.
 
     ### **Standardization Logic**
     Every raw data point (dollars, degrees, or percentages) is standardized on a scale of **0.0 to 1.0**. 
-    * **0.0** represents the lowest need/impact in the county.
-    * **1.0** represents the highest need/impact in the county.
+    * **0.0** represents the lowest need or impact in the county.
+    * **1.0** represents the highest need or impact in the county.
 
     ### **Impact Score Equation**
-    The total **Impact Score (0.0 - 4.0)** is calculated as a weighted average of the four pillars, scaled to a maximum of 4. This ensures that even if one pillar is prioritized, the final score remains comparable across the county:
+    The total **Impact Score (0.0 to 4.0)** is calculated as a weighted average of the four pillars, scaled to a maximum of 4. This ensures that even if one pillar is prioritized, the final score remains comparable across the county:
     
     $$Impact Score = 4 \times \frac{{\sum (w_{{i}} \times s_{{i}})}}{{\sum w_{{i}}}}$$
     
@@ -47,13 +54,13 @@ with st.expander("📖 Methodology, Data Sources & Years"):
     * **Heat Burden ($w_h$):** {w_h}
     * **Food Access ($w_s$):** {w_s}
 
-    ### **Impact Ranges & Severity Logic**
-    The following ranges represent the total potential need of a community. Because these four pillars often overlap, we assume that as the score increases, the community is experiencing **Systemic Compounding**—where multiple environmental and social stressors intersect to create a significantly higher state of vulnerability than a single factor alone.
+    ### **Impact Ranges and Severity Logic**
+    The following ranges represent the total potential need of a community. Because these four pillars often overlap, we assume that as the score increases, the community is experiencing **Systemic Compounding** where multiple environmental and social stressors intersect to create a significantly higher state of vulnerability than a single factor alone.
 
-    - <span style="color:#2ecc71; font-weight:bold;">0.0 - 0.8 (Low Impact):</span> Assumes 0% to 20% of total potential need.
-    - <span style="color:#f1c40f; font-weight:bold;">0.8 - 1.6 (Medium Impact):</span> Assumes 20% to 40% of total potential need.
-    - <span style="color:#e67e22; font-weight:bold;">1.6 - 2.4 (High Impact):</span> Assumes 40% to 60% of total potential need.
-    - <span style="color:#e74c3c; font-weight:bold;">2.4 - 4.0 (Extreme Impact):</span> Assumes 60% to 100% of total potential need.
+    * <span style="color:#2ecc71; font-weight:bold;">0.0 to 0.8 (Low Impact):</span> Assumes 0% to 20% of total potential need.
+    * <span style="color:#f1c40f; font-weight:bold;">0.8 to 1.6 (Medium Impact):</span> Assumes 20% to 40% of total potential need.
+    * <span style="color:#e67e22; font-weight:bold;">1.6 to 2.4 (High Impact):</span> Assumes 40% to 60% of total potential need.
+    * <span style="color:#e74c3c; font-weight:bold;">2.4 to 4.0 (Extreme Impact):</span> Assumes 60% to 100% of total potential need.
     """, unsafe_allow_html=True)
 
 # ----------------------------
@@ -69,8 +76,8 @@ def load_all_data():
     
     if data_path is None: raise FileNotFoundError("Data folder not found.")
 
-    # 1. EJSM
-    df_ejsm = pd.read_csv(f"{data_path}/EJSM_Origonal.csv")
+    # 1. EJSM (Spelling corrected to Original)
+    df_ejsm = pd.read_csv(f"{data_path}/EJSM_Original.csv")
     df_ejsm.columns = df_ejsm.columns.str.strip()
     df_ejsm['GEOID10'] = df_ejsm['Tract_1'].astype(str).str.split('.').str[0].str.zfill(11)
     df_ejsm['CIscore'] = pd.to_numeric(df_ejsm['CIscore'], errors='coerce')
@@ -94,7 +101,7 @@ def load_all_data():
     
     def format_geoid(x):
         s = str(x).split('.')[0].strip()
-        if len(s) <= 7: # It's a 6-digit tract; add CA (06) + LA (037)
+        if len(s) <= 7: 
             return "06037" + s.zfill(6)
         return s.zfill(11)
 
@@ -133,10 +140,11 @@ df_ejsm, df_income, df_heat, df_snap, df_ziptract, df_comb = load_all_data()
 # ----------------------------
 
 st.sidebar.header("📍 Search Area")
-zip_in = st.sidebar.text_input("Enter ZIP Code:", "91505")
+# Clarified ZIP Code location constraint
+zip_in = st.sidebar.text_input("Enter ZIP Code (LA County Only):", "91505")
 match = df_ziptract[df_ziptract['ZIP'] == zip_in]
 
-ERROR_MSG = "The inputted zip code either doesn't exist within Los Angeles County or doesn't have any reliable data reported. Please try another Zipcode."
+ERROR_MSG = "The inputted ZIP Code either does not exist within Los Angeles County or does not have any reliable data reported. Please try another ZIP Code."
 
 if match.empty:
     st.error(ERROR_MSG)
@@ -155,12 +163,9 @@ if missing_info_count >= 3:
     st.error(ERROR_MSG)
     st.stop()
 
-# --- CUSTOM WEIGHING CALCULATION ---
 total_weight_sum = sum(weights_list)
 actual_score = 4 * ( (raw_scores['s_e'] * w_e) + (raw_scores['s_i'] * w_i) + (raw_scores['s_h'] * w_h) + (raw_scores['s_s'] * w_s) ) / total_weight_sum
 
-# Monte Carlo: 10,000 simulations
-# Use Dirichlet Distribution centered on your target weights so the Mean matches the Impact Score.
 x_matrix = df_comb[['s_e', 's_i', 's_h', 's_s']].to_numpy()
 target_ratios = np.array(weights_list) / total_weight_sum
 sim_weights = np.random.dirichlet(target_ratios * 30, 10000) 
@@ -168,7 +173,6 @@ sim_results = np.dot(sim_weights, x_matrix.T) * 4
 local_sims = sim_results[:, idx_row]
 m_loc, s_loc = norm.fit(local_sims)
 
-# Impact Range Logic
 if actual_score < 0.8: tier, color = "LOW IMPACT", "#2ecc71"
 elif 0.8 <= actual_score < 1.6: tier, color = "MEDIUM IMPACT", "#f1c40f"
 elif 1.6 <= actual_score < 2.4: tier, color = "HIGH IMPACT", "#e67e22"
@@ -206,9 +210,9 @@ with col_r:
     st.markdown(f"""
     This graph analyzes the stability of the impact score using **10,000 simulations**. By randomly shifting the priority of our four pillars, we determine the certainty of the final score. 
     
-    - **Blue Line:** The theoretical distribution of scores.
-    - **Dotted Red Lines:** Represent the Confidence Interval. **The closer these lines are to the mean, the more certain we are of the data's precision in this location.**
-    - **Standard Deviation:** A measure of "spread." A small number indicates the score remains consistent across different weighting scenarios.
+    * **Blue Line:** The theoretical distribution of scores.
+    * **Dotted Red Lines:** Represent the Confidence Interval. **The closer these lines are to the mean, the more certain we are of the data precision in this location.**
+    * **Standard Deviation:** A measure of "spread." A small number indicates the score remains consistent across different weighting scenarios.
     """)
     st.table(pd.DataFrame({
         "Metric": ["Calculated Score", "Standard Deviation (Volatility)"],
@@ -219,7 +223,7 @@ with col_r:
 # 3. COUNTY CONTEXT (CDF)
 # ----------------------------
 st.divider()
-st.header("🌎 County-Wide Impact Ranking")
+st.header("🌎 County Wide Impact Ranking")
 
 st.markdown("""
 This plot ranks every Census Tract in Los Angeles County from **Lowest Need (Left)** to **Highest Need (Right)**.
@@ -233,32 +237,32 @@ sort_idx = np.argsort(medians)
 
 fig_cdf, ax_cdf = plt.subplots(figsize=(12, 5))
 ax_cdf.plot(medians[sort_idx], color='#1f77b4', lw=2.5, label='LA County Median Curve')
-ax_cdf.fill_between(range(len(medians)), p25[sort_idx], p75[sort_idx], color='#1f77b4', alpha=0.2, label='25th-75th Percentile')
+ax_cdf.fill_between(range(len(medians)), p25[sort_idx], p75[sort_idx], color='#1f77b4', alpha=0.2, label='25th to 75th Percentile')
 
 rank_pos = np.searchsorted(medians[sort_idx], actual_score)
 ax_cdf.scatter(rank_pos, actual_score, color='red', s=200, zorder=10, label=f'ZIP {zip_in} Rank', edgecolor='white')
 
 ax_cdf.grid(True, linestyle='-', alpha=0.2)
-ax_cdf.set_ylabel("Impact Score (0-4)")
+ax_cdf.set_ylabel("Impact Score (0 to 4)")
 ax_cdf.set_xlabel("Census Tracts (Sorted by Need)")
 ax_cdf.legend(loc='lower right')
 st.pyplot(fig_cdf)
 
 percentile = (medians < actual_score).mean() * 100
 if percentile > 75:
-    st.warning(f"📍 **ZIP {zip_in}** is in the top **{100-percentile:.1f}%** of high-need areas in the county. Its need is significantly higher than most of LA.")
+    st.warning(f"📍 **ZIP {zip_in}** is in the top **{100-percentile:.1f}%** of high need areas in the county. Its need is significantly higher than most of LA.")
 elif percentile < 25:
     st.success(f"📍 **ZIP {zip_in}** is in the bottom **{percentile:.1f}%** of need areas. Its need is lower than most of the county.")
 else:
     st.info(f"📍 **ZIP {zip_in}** is in the middle range, with a higher need than **{percentile:.1f}%** of LA tracts.")
 
 # ----------------------------
-# 4. PILLAR DEEP-DIVE
+# 4. PILLAR DEEP DIVE
 # ----------------------------
 st.divider()
-st.header("🔍 Pillar Deep-Dive")
+st.header("🔍 Pillar Deep Dive")
 
-def plot_pillar(df, col, name, unit, desc, score_key, bins, weight, is_high_danger=True, source="", anchor_id=""):
+def plot_pillar(df, col, name, unit, desc, score_key, bins, weight, is_high_danger=True, source="", anchor_id="", calc_desc=""):
     st.markdown(f'<div id="{anchor_id}"></div>', unsafe_allow_html=True)
     sub = df[df['GEOID10'] == target_geoid]
     
@@ -269,7 +273,6 @@ def plot_pillar(df, col, name, unit, desc, score_key, bins, weight, is_high_dang
     val = sub[col].values[0]
     std_val = raw_scores[score_key]
     
-    # Calculate percentage contribution to the total impact score
     weighted_contrib = std_val * weight
     total_weighted_points = sum([raw_scores['s_e']*w_e, raw_scores['s_i']*w_i, raw_scores['s_h']*w_h, raw_scores['s_s']*w_s])
     pct_contrib = (weighted_contrib / total_weighted_points * 100) if total_weighted_points > 0 else 0
@@ -282,13 +285,17 @@ def plot_pillar(df, col, name, unit, desc, score_key, bins, weight, is_high_dang
         st.subheader(name)
         st.markdown(f"**Description:** {desc}")
         st.markdown(f"**Data Source:** {source}")
+        st.markdown(f"**Calculation Logic:** {calc_desc}")
         st.metric(f"ZIP {zip_in} Raw Value", f"{val:,.1f} {unit}")
         st.metric("Pillar Score Contribution", f"{std_val:.3f} / 1.0")
         st.metric("% of Total Impact Score", f"{pct_contrib:.1f}%")
         
+        # Clarified Danger Zone Boundary logic
         thresh = mean_v + std_v if is_high_danger else mean_v - std_v
+        st.markdown(f"**Boundary:** The Danger Zone begins at {thresh:,.1f} {unit} (1 Standard Deviation from the average).")
+        
         if (is_high_danger and val > thresh) or (not is_high_danger and val < thresh):
-            st.error("🚨 **DANGER ZONE:** This metric exceeds the critical threshold.")
+            st.error("🚨 **DANGER ZONE:** This metric exceeds the critical statistical threshold.")
         else:
             st.success("✅ **NORMAL RANGE:** This metric is within acceptable bounds.")
 
@@ -305,7 +312,7 @@ def plot_pillar(df, col, name, unit, desc, score_key, bins, weight, is_high_dang
         ax.plot(x_vals, norm.pdf(x_vals, mean_v, std_v), color='black', lw=2, label='Normal Distribution')
         
         ax.axvline(val, color='blue', lw=3, label=f'ZIP {zip_in}')
-        ax.axvline(mean_v + std_v, color='red', ls=':', lw=2, label='±1 SD')
+        ax.axvline(mean_v + std_v, color='red', ls=':', lw=2, label='±1 SD Boundary')
         ax.axvline(mean_v - std_v, color='red', ls=':', lw=2)
         
         ax.set_xlabel(f"{unit}")
@@ -314,26 +321,31 @@ def plot_pillar(df, col, name, unit, desc, score_key, bins, weight, is_high_dang
         st.pyplot(fig)
     st.divider()
 
+# Added calculation explanations for each pillar
 pillars = [
     (df_ejsm, 'CIscore', 'Environmental Justice (EJSM)', 'Points', 
-     "This metric evaluates environmental justice across hazard proximity, health risk, social vulnerability, and canopy cover. Scores range from 4 to 20. Areas scoring more than 1 SD below the mean (< 7.65) are identified as having the highest need for community green space.", 
-     's_e', 20, w_e, False, "USC / Occidental College / LA County (2022)", "environmental-justice-ejsm"),
+     "This metric evaluates environmental justice across hazard proximity, health risk, social vulnerability, and canopy cover. Scores range from 4 to 20.", 
+     's_e', 20, w_e, False, "USC / Occidental College / LA County (2022)", "environmental-justice-ejsm",
+     "Calculated by standardizing the cumulative CIscore where lower values represent higher need."),
     
     (df_income, 'med_hh_income', 'Median Household Income', '$USD', 
-     "Measures the median income for households within the tract. With a county-wide mean income of $93,525, 'Danger Zones' are defined as tracts at or below $53,423. Lower income levels directly correlate to fewer private green spaces and higher climate vulnerability.", 
-     's_i', 250, w_i, False, "US Census Bureau ACS 5-Year Estimates (2021)", "median-household-income"),
+     "Measures the median income for households within the tract. Lower income levels correlate to fewer private green spaces.", 
+     's_i', 250, w_i, False, "US Census Bureau ACS 5-Year Estimates (2021)", "median-household-income",
+     "Calculated using an inverse standardization; as income decreases, the impact score increases."),
     
     (df_heat, 'DegHourDay', 'Heat Burden', 'Degree Hours per Day', 
-     "Measured in 'Degree Hours per Day,' which tracks how many degrees—and for how long—the local temperature exceeds a baseline of 80°F. With a county median of 42.36, areas exceeding 82.61 are 'Danger Zones.' High numbers indicate intense, sustained heat exposure that can be mitigated by garden transpiration.", 
-     's_h', 150, w_h, True, "Safe Clean Water Program LA (2022)", "heat-burden"),
+     "Tracks how many degrees and for how long the local temperature exceeds a baseline of 80°F.", 
+     's_h', 150, w_h, True, "Safe Clean Water Program LA (2022)", "heat-burden",
+     "Calculated by standardizing total Degree Hours; higher sustained heat equals a higher score."),
     
     (df_snap, 'SNAP_pct', 'Food Access (SNAP)', '% Pop', 
-     "Calculated as (SNAP Participants / Total Population) * 100. The county mean is 3.15%. 'Danger Zones' exceed 5.52% participation, pinpointing 'food deserts' where gardens alleviate the burden of fresh produce.", 
-     's_s', 150, w_s, True, "USDA Food Access Research Atlas (2019)", "food-access-snap")
+     "Calculated as (SNAP Participants / Total Population) * 100. Pinpoints areas where fresh produce is less accessible.", 
+     's_s', 150, w_s, True, "USDA Food Access Research Atlas (2019)", "food-access-snap",
+     "Calculated by standardizing the percentage of the population relying on SNAP assistance.")
 ]
 
 for p in sorted(pillars, key=lambda x: raw_scores[x[5]], reverse=True):
-    plot_pillar(p[0], p[1], p[2], p[3], p[4], p[5], p[6], p[7], p[8], source=p[9], anchor_id=p[10])
+    plot_pillar(p[0], p[1], p[2], p[3], p[4], p[5], p[6], p[7], p[8], source=p[9], anchor_id=p[10], calc_desc=p[11])
 
 
 # ----------------------------
@@ -371,7 +383,7 @@ with col_m2:
         st.image(map_heat, use_container_width=True)
     else:
         st.info("Map not found at specified path.")
-    st.caption("Displays areas with high degree-hour exposure and low canopy cover.")
+    st.caption("Displays areas with high degree hour exposure and low canopy cover.")
 
     st.subheader("💰 Median Household Income")
     map_income = "GKG-Impact-Score/map_photos/median_household_income.png"
@@ -379,14 +391,4 @@ with col_m2:
         st.image(map_income, use_container_width=True)
     else:
         st.info("Map not found at specified path.")
-    st.caption("Identifies underserved low-income tracts across the county.")
-
-
-
-
-
-
-
-
-
-
+    st.caption("Identifies underserved low income tracts across the county.")
