@@ -56,6 +56,27 @@ with st.expander("📖 Methodology, Data Sources & Years"):
     - <span style="color:#e74c3c; font-weight:bold;">2.4 - 4.0 (Extreme Impact):</span> Assumes 60% to 100% of total potential need.
     """, unsafe_allow_html=True)
 
+# --- NEW SECTION: APPENDIX & GLOSSARY ---
+with st.expander("📚 Appendix: Glossary of Terms & Definitions"):
+    st.markdown("""
+    ### **Dashboard Specific Terms**
+    * **Impact Score (0.0 - 4.0):** A composite number representing the 'need' of a specific area. A higher score indicates a higher priority for Good Karma Gardens' intervention due to intersecting social and environmental stressors.
+    * **Standardization (0.0 - 1.0):** A mathematical process that converts different units (like dollars, percentages, and degrees) into a common scale. This allows us to compare "apples to oranges" (e.g., comparing income to heat levels).
+    * **Systemic Compounding:** A term used here to describe how multiple disadvantages (like low income + high heat + low food access) don't just add up; they multiply the hardship a community faces.
+    
+    ### **Technical & Statistical Terms**
+    * **Census Tract (GEOID):** A small, relatively permanent statistical subdivision of a county used by the US Census. It is more precise than a ZIP code for measuring local impact.
+    * **Monte Carlo Simulation:** A computerized mathematical technique that allows people to account for risk and uncertainty. We use 10,000 "simulated" weight changes to see how stable the Impact Score is.
+    * **Dirichlet Distribution:** A type of probability distribution used in our simulation to ensure that while we shift weights around, they always add up to a logical total.
+    * **Standard Deviation (Volatility):** A measure of how much the score changes when you change the priorities (weights). A low volatility means the area has a high need regardless of which pillar you value most.
+    
+    ### **Environmental & Social Metrics**
+    * **EJSM (Environmental Justice Screening Method):** A scoring system that identifies areas where residents are disproportionately burdened by pollution and social vulnerabilities.
+    * **Degree Hours per Day:** A measurement of heat intensity over time. It doesn't just look at the high temperature, but how long the temperature stays dangerously high during a 24-hour period.
+    * **Transpiration:** The process where plants release water vapor into the air. This acts like "natural air conditioning," which is why gardens are vital for lowering the **Heat Burden**.
+    * **SNAP (Supplemental Nutrition Assistance Program):** Formerly known as Food Stamps. High participation in a tract often indicates a "food desert" where residents struggle to afford or access fresh produce.
+    """)
+
 # ----------------------------
 # 1. Data Loading 
 # ----------------------------
