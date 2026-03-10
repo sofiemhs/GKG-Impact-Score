@@ -19,7 +19,8 @@ weights_list = [w_e, w_i, w_h, w_s]
 st.title("🌿 Good Karma Gardens: Impact Score Analysis")
 
 with st.expander("📖 Methodology, Data Sources & Years"):
-    # Using fr""" (Raw Formatted String) to handle LaTeX backslashes and variables simultaneously
+    # Using fr""" (Raw Formatted String) to handle LaTeX backslashes and variables
+    # Literal LaTeX braces are doubled {{ }} to avoid NameErrors.
     st.markdown(fr"""
     ### **The Question We Are Answering**
     "What impact does Good Karma Gardens' work have when converting spaces into gardens based on their location?"
@@ -38,7 +39,7 @@ with st.expander("📖 Methodology, Data Sources & Years"):
     ### **Impact Score Equation**
     The total **Impact Score (0.0 - 4.0)** is calculated as a weighted average of the four pillars, scaled to a maximum of 4. This ensures that even if one pillar is prioritized, the final score remains comparable across the county:
     
-    $$Impact Score = 4 \times \frac{{\sum (w_{i} \times s_{i})}}{{\sum w_{i}}}$$
+    $$Impact Score = 4 \times \frac{{\sum (w_{{i}} \times s_{{i}})}}{{\sum w_{{i}}}}$$
     
     **Current Active Weights:**
     * **Environmental Justice ($w_e$):** {w_e}
@@ -159,6 +160,7 @@ total_weight_sum = sum(weights_list)
 actual_score = 4 * ( (raw_scores['s_e'] * w_e) + (raw_scores['s_i'] * w_i) + (raw_scores['s_h'] * w_h) + (raw_scores['s_s'] * w_s) ) / total_weight_sum
 
 # Monte Carlo: 10,000 simulations
+# Use Dirichlet Distribution centered on your target weights so the Mean matches the Impact Score.
 x_matrix = df_comb[['s_e', 's_i', 's_h', 's_s']].to_numpy()
 target_ratios = np.array(weights_list) / total_weight_sum
 sim_weights = np.random.dirichlet(target_ratios * 30, 10000) 
