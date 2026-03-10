@@ -17,7 +17,6 @@ weights_list = [w_e, w_i, w_h, w_s]
 # --- SECTION 1: MISSION & PILLAR LOGIC ---
 st.title("🌿 Good Karma Gardens: Impact Score Analysis")
 
-# New Definition Section
 with st.expander("📖 Glossary of Terms and Definitions"):
     st.markdown("""
     * **Pillar Score Contribution:** This represents the individual impact of a single category (like Heat or Income). It is the standardized score (0.0 to 1.0) multiplied by the weight assigned to that category.
@@ -76,8 +75,8 @@ def load_all_data():
     
     if data_path is None: raise FileNotFoundError("Data folder not found.")
 
-    # 1. EJSM (Spelling corrected to Original)
-    df_ejsm = pd.read_csv(f"{data_path}/EJSM_Original.csv")
+    # REVERTED: Matching the actual misspelled filename to fix FileNotFoundError
+    df_ejsm = pd.read_csv(f"{data_path}/EJSM_Origonal.csv")
     df_ejsm.columns = df_ejsm.columns.str.strip()
     df_ejsm['GEOID10'] = df_ejsm['Tract_1'].astype(str).str.split('.').str[0].str.zfill(11)
     df_ejsm['CIscore'] = pd.to_numeric(df_ejsm['CIscore'], errors='coerce')
@@ -140,7 +139,6 @@ df_ejsm, df_income, df_heat, df_snap, df_ziptract, df_comb = load_all_data()
 # ----------------------------
 
 st.sidebar.header("📍 Search Area")
-# Clarified ZIP Code location constraint
 zip_in = st.sidebar.text_input("Enter ZIP Code (LA County Only):", "91505")
 match = df_ziptract[df_ziptract['ZIP'] == zip_in]
 
@@ -290,7 +288,6 @@ def plot_pillar(df, col, name, unit, desc, score_key, bins, weight, is_high_dang
         st.metric("Pillar Score Contribution", f"{std_val:.3f} / 1.0")
         st.metric("% of Total Impact Score", f"{pct_contrib:.1f}%")
         
-        # Clarified Danger Zone Boundary logic
         thresh = mean_v + std_v if is_high_danger else mean_v - std_v
         st.markdown(f"**Boundary:** The Danger Zone begins at {thresh:,.1f} {unit} (1 Standard Deviation from the average).")
         
@@ -321,7 +318,6 @@ def plot_pillar(df, col, name, unit, desc, score_key, bins, weight, is_high_dang
         st.pyplot(fig)
     st.divider()
 
-# Added calculation explanations for each pillar
 pillars = [
     (df_ejsm, 'CIscore', 'Environmental Justice (EJSM)', 'Points', 
      "This metric evaluates environmental justice across hazard proximity, health risk, social vulnerability, and canopy cover. Scores range from 4 to 20.", 
