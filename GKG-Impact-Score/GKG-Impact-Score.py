@@ -27,11 +27,11 @@ with st.expander("📖 Methodology, Data Sources & Years"):
     * **1.0** represents the highest need/impact in the county.
 
     ### **Impact Score Equation**
-    The total **Impact Score (0.0 - 4.0)** is the sum of these four pillars. The final score is the cumulative sum of the standardized scores ($s$) across all four pillars:
+    The total **Impact Score (0.0 - 4.0)** is calculated as a weighted average of the four pillars, scaled to a maximum of 4. This ensures that even if one pillar is prioritized, the final score remains comparable across the county:
     
-    $$Impact Score = s_{e} + s_{i} + s_{h} + s_{s}$$
+    $$Impact Score = 4 \times \\frac{\sum (w_{i} \\times s_{i})}{\sum w_{i}}$$
     
-    **Weighting:** Currently, all pillars are weighted equally. If you wish to prioritize one pillar over others (e.g., placing more importance on Food Access), you must adjust this manually in the Python script. (Navigate to **SECTION 2: LOCAL ANALYSIS** within the code and refer to header "Custom Weighing Adjustment" for instructions and examples on how to modify these values.)
+    **Weighting:** Currently, you can adjust the importance of specific pillars. If you wish to prioritize one pillar over others (e.g., placing more importance on Food Access), you must adjust this manually in the Python script. (Navigate to **SECTION 2: LOCAL ANALYSIS** within the code and refer to header "Custom Weighing Adjustment".)
 
     ### **Impact Ranges & Severity Logic**
     The following ranges represent the total potential need of a community. Because these four pillars often overlap, we assume that as the score increases, the community is experiencing **Systemic Compounding**—where multiple environmental and social stressors intersect to create a significantly higher state of vulnerability than a single factor alone.
@@ -74,7 +74,7 @@ def load_all_data():
     df_heat['DegHourDay'] = pd.to_numeric(df_heat['DegHourDay'], errors='coerce')
     df_heat['GEOID10'] = df_heat['FIPS'].astype(str).str.split('.').str[0].str.zfill(11)
 
-    # 4. Food Access (CORRECTED MATCHING LOGIC)
+    # 4. Food Access
     df_snap = pd.read_csv(f"{data_path}/Food_Deserts_CLEAN.csv")
     df_snap.columns = df_snap.columns.str.strip()
     
@@ -142,27 +142,17 @@ if missing_info_count >= 3:
     st.stop()
 
 # --- CUSTOM WEIGHING ADJUSTMENT ---
-# Variable Key for Weighting:
-# s_e = Environmental Justice (EJSM)
-# s_i = Median Household Income
-# s_h = Heat Burden (Temperature)
-# s_s = Food Access (SNAP)
-#
-# HOW TO WEIGHT: 
-# To weight a pillar, multiply its specific variable below by your desired factor.
-#
-# Example 1: To have each pillar weighted equally 
-# actual_score = raw_scores['s_s']  + raw_scores['s_e'] + raw_scores['s_i'] + raw_scores['s_h']
-# 
-# Example 1: To make Food Access (SNAP) twice as important as everything else:
-# actual_score = (raw_scores['s_s'] * 2.0) + raw_scores['s_e'] + raw_scores['s_i'] + raw_scores['s_h']
-#
-# Example 2: To make everything ELSE twice as important as Food Access (SNAP):
-# actual_score = raw_scores['s_s'] + (raw_scores['s_e'] * 2.0) + (raw_scores['s_i'] * 2.0) + (raw_scores['s_h'] * 2.0)
-#
-# Example 3: Original Heat Burden example (Heat twice as important):
-# actual_score = (raw_scores['s_h'] * 2.0) + raw_scores['s_e'] + raw_scores['s_i'] + raw_scores['s_s']
-actual_score = (raw_scores['s_s']*2) + raw_scores['s_e'] + raw_scores['s_i'] + raw_scores['s_h']
+# Instructions: Adjust the numerical values (weights) below to prioritize specific pillars.
+# The actual_score will automatically be normalized back to a 0.0 - 4.0 scale.
+
+w_e = 1.0  # Environmental Justice (EJSM)
+w_i = 1.0  # Median Household Income
+w_h = 1.0  # Heat Burden (Temperature)
+w_s = 2.0  # Food Access (SNAP) - currently weighted twice as high
+
+# This formula ensures the result is always on a scale of 0-4
+total_weight = w_e + w_i + w_h + w_s
+actual_score = 4 * ( (raw_scores['s_e'] * w_e) + (raw_scores['s_i'] * w_i) + (raw_scores['s_h'] * w_h) + (raw_scores['s_s'] * w_s) ) / total_weight
 
 # Monte Carlo: 10,000 simulations
 x_matrix = df_comb[['s_e', 's_i', 's_h', 's_s']].to_numpy()
@@ -183,7 +173,7 @@ st.header("📊 Impact Score Approximation")
 st.markdown(f"""
 <div style="background-color:{color}; padding:20px; border-radius:15px; border: 2px solid rgba(0,0,0,0.1); margin-bottom:20px; text-align:center;">
     <p style="color:white; font-size:1.2rem; margin:0; font-weight:bold; text-transform:uppercase;">{tier}</p>
-    <h1 style="color:white; font-size:5rem; margin:0; line-height:1;">{m_loc:.2f} <span style="font-size:1.5rem;">± {s_loc:.3f}</span></h1>
+    <h1 style="color:white; font-size:5rem; margin:0; line-height:1;">{actual_score:.2f} <span style="font-size:1.5rem;">± {s_loc:.3f}</span></h1>
     <p style="color:white; font-weight:bold; margin-top:10px;">Calculated Impact Score for ZIP {zip_in}</p>
 </div>
 """, unsafe_allow_html=True)
@@ -194,7 +184,7 @@ with col_l:
     ax_sim.hist(local_sims, bins=50, color='#aed6f1', density=True, alpha=0.7)
     x_range = np.linspace(min(local_sims), max(local_sims), 100)
     ax_sim.plot(x_range, norm.pdf(x_range, m_loc, s_loc), color='#2e86c1', lw=3)
-    ax_sim.axvline(actual_score, color='#1b4f72', lw=3, label=f'Raw Calculation: {actual_score:.2f}')
+    ax_sim.axvline(actual_score, color='#1b4f72', lw=3, label=f'Weighted Score: {actual_score:.2f}')
     
     ax_sim.axvline(actual_score - s_loc, color='#e74c3c', ls=':', lw=2, label='Confidence Bounds')
     ax_sim.axvline(actual_score + s_loc, color='#e74c3c', ls=':', lw=2)
@@ -236,19 +226,19 @@ p75 = np.percentile(sim_results, 75, axis=0)
 sort_idx = np.argsort(medians)
 
 fig_cdf, ax_cdf = plt.subplots(figsize=(12, 5))
-ax_cdf.plot(medians[sort_idx], color='#1f77b4', lw=2.5, label='LA County Median Curve')
-ax_cdf.fill_between(range(len(medians)), p25[sort_idx], p75[sort_idx], color='#1f77b4', alpha=0.2, label='25th-75th Percentile')
+ax_cdf.plot(medians[sort_idx] * 4, color='#1f77b4', lw=2.5, label='LA County Median Curve')
+ax_cdf.fill_between(range(len(medians)), p25[sort_idx] * 4, p75[sort_idx] * 4, color='#1f77b4', alpha=0.2, label='25th-75th Percentile')
 
-rank_pos = np.searchsorted(medians[sort_idx], medians[idx_row])
-ax_cdf.scatter(rank_pos, medians[idx_row], color='red', s=200, zorder=10, label=f'ZIP {zip_in} Rank', edgecolor='white')
+rank_pos = np.searchsorted(medians[sort_idx] * 4, actual_score)
+ax_cdf.scatter(rank_pos, actual_score, color='red', s=200, zorder=10, label=f'ZIP {zip_in} Rank', edgecolor='white')
 
 ax_cdf.grid(True, linestyle='-', alpha=0.2)
-ax_cdf.set_ylabel("Weighted Standardized Index")
+ax_cdf.set_ylabel("Impact Score (0-4)")
 ax_cdf.set_xlabel("Census Tracts (Sorted by Need)")
 ax_cdf.legend(loc='lower right')
 st.pyplot(fig_cdf)
 
-percentile = (medians < medians[idx_row]).mean() * 100
+percentile = (medians * 4 < actual_score).mean() * 100
 if percentile > 75:
     st.warning(f"📍 **ZIP {zip_in}** is in the top **{100-percentile:.1f}%** of high-need areas in the county. Its need is significantly higher than most of LA.")
 elif percentile < 25:
@@ -342,7 +332,6 @@ The following spatial data layers illustrate the geographic distribution of need
 These visuals help contextualize the **Impact Score** by showing where environmental and social stressors intersect on a regional scale.
 """)
 
-# Map layout in a 2x2 grid
 col_m1, col_m2 = st.columns(2)
 
 with col_m1:
@@ -378,4 +367,3 @@ with col_m2:
     else:
         st.info("Map not found at specified path.")
     st.caption("Identifies underserved low-income tracts across the county.")
-
