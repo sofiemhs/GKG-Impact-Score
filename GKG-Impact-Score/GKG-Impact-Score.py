@@ -13,7 +13,7 @@ Income = 1.0
 Heat = 1.0
 Food = 1.0
 
-# --- SECTION 0: GLOBAL WEIGHT CONFIGURATION ---
+# SECTION 0: GLOBAL WEIGHT CONFIGURATION
 st.sidebar.header("⚖️ Impact Weighting")
 st.sidebar.markdown("Adjust the importance of each pillar. Set to 0 to exclude a factor.")
 w_e = st.sidebar.number_input("Environmental Justice Weight", min_value=0.0, value=Enviro, step=0.1)
@@ -23,7 +23,7 @@ w_s = st.sidebar.number_input("Food Access Weight", min_value=0.0, value=Food, s
 
 weights_list = [w_e, w_i, w_h, w_s]
 
-# --- SECTION 1: MISSION & PILLAR LOGIC ---
+# SECTION 1: METHODOLOGY TAB
 st.title("🌿 Good Karma Gardens: Impact Score Analysis")
 
 with st.expander("📖 Methodology, Data Sources & Years"):
@@ -62,7 +62,7 @@ with st.expander("📖 Methodology, Data Sources & Years"):
     - <span style="color:#e74c3c; font-weight:bold;">2.4 - 4.0 (Extreme Impact):</span> Assumes 60% to 100% of total potential need.
     """, unsafe_allow_html=True)
 
-# --- NEW SECTION: APPENDIX & GLOSSARY ---
+# SECTION 2: APPENDIX & GLOSSARY TAB
 with st.expander("📚 Appendix: Glossary of Terms & Definitions"):
     st.markdown("""
     ### **Dashboard Specific Terms**
@@ -83,10 +83,8 @@ with st.expander("📚 Appendix: Glossary of Terms & Definitions"):
     * **SNAP (Supplemental Nutrition Assistance Program):** Formerly known as Food Stamps. High participation in a tract often indicates a "food desert" where residents struggle to afford or access fresh produce.
     """)
 
-# ----------------------------
+# SECTION 3: CALCULATIONS 
 # 1. Data Loading 
-# ----------------------------
-
 @st.cache_data
 def load_all_data():
     possible_paths = ["data", "GKG-Impact-Score/data"]
@@ -136,7 +134,7 @@ def load_all_data():
     df_ziptract['ZIP'] = df_ziptract['ZIP'].astype(str).str.zfill(5)
     df_ziptract['GEOID10'] = df_ziptract['TRACT'].astype(str).str.split('.').str[0].str.zfill(11)
 
-    # Standardization helper
+    # 6. Standardization helper
     def std(df, col, inv=False):
         s = (df[col] - df[col].min()) / (df[col].max() - df[col].min())
         return 1 - s if inv else s
@@ -146,7 +144,7 @@ def load_all_data():
     df_heat['s'] = std(df_heat, 'DegHourDay')
     df_snap['s'] = std(df_snap, 'SNAP_pct')
 
-    # Merge all into master set
+    # 7. Merge all into master set
     df_comb = df_ejsm[['GEOID10','s']].merge(df_income[['GEOID10','s']], on='GEOID10', how='outer', suffixes=('_e','_i')) \
               .merge(df_heat[['GEOID10','s']], on='GEOID10', how='outer') \
               .merge(df_snap[['GEOID10','s']], on='GEOID10', how='outer', suffixes=('_h','_s')).fillna(0)
@@ -155,10 +153,7 @@ def load_all_data():
 
 df_ejsm, df_income, df_heat, df_snap, df_ziptract, df_comb = load_all_data()
 
-# ----------------------------
-# 2. LOCAL ANALYSIS
-# ----------------------------
-
+# 8. User Input 
 st.sidebar.header("📍 Search Area")
 zip_in = st.sidebar.text_input("Enter ZIP Code:", "91505")
 match = df_ziptract[df_ziptract['ZIP'] == zip_in]
@@ -182,7 +177,7 @@ if missing_info_count >= 3:
     st.error(ERROR_MSG)
     st.stop()
 
-# --- CUSTOM WEIGHING CALCULATION ---
+# 9. Weight Calculation 
 total_weight_sum = sum(weights_list)
 
 if total_weight_sum == 0:
@@ -191,7 +186,7 @@ if total_weight_sum == 0:
 else:
     actual_score = 4 * ( (raw_scores['s_e'] * w_e) + (raw_scores['s_i'] * w_i) + (raw_scores['s_h'] * w_h) + (raw_scores['s_s'] * w_s) ) / total_weight_sum
 
-# Monte Carlo: 10,000 simulations
+# 10. Monte Carlo (10,000 simulations)
 x_matrix = df_comb[['s_e', 's_i', 's_h', 's_s']].to_numpy()
 if total_weight_sum > 0:
     target_ratios = np.array(weights_list) / total_weight_sum
@@ -206,7 +201,7 @@ else:
     local_sims = np.zeros(10000)
     m_loc, s_loc = 0, 0
 
-# Impact Range Logic
+# 11. Impact Range Logic
 if actual_score < 0.8: tier, color = "LOW IMPACT", "#2ecc71"
 elif 0.8 <= actual_score < 1.6: tier, color = "MEDIUM IMPACT", "#f1c40f"
 elif 1.6 <= actual_score < 2.4: tier, color = "HIGH IMPACT", "#e67e22"
@@ -255,9 +250,8 @@ with col_r:
         "Value": [f"{actual_score:.3f}", f"{s_loc:.3f}"]
     }))
 
-# ----------------------------
-# 3. COUNTY CONTEXT (CDF)
-# ----------------------------
+
+# 12. CDF
 st.divider()
 st.header("🌎 County-Wide Impact Ranking")
 
@@ -292,9 +286,7 @@ elif percentile < 25:
 else:
     st.info(f"📍 **ZIP {zip_in}** is in the middle range, with a higher need than **{percentile:.1f}%** of LA tracts.")
 
-# ----------------------------
-# 4. PILLAR DEEP-DIVE
-# ----------------------------
+# SECTION 4. PILLAR DEEP-DIVE
 st.divider()
 st.header("🔍 Pillar Deep-Dive")
 
@@ -309,7 +301,7 @@ def plot_pillar(df, col, name, unit, desc, score_key, bins, weight, is_high_dang
     val = sub[col].values[0]
     std_val = raw_scores[score_key]
     
-    # Calculate percentage contribution to the total impact score
+    # 1. Calculate percentage contribution to the total impact score
     weighted_contrib = std_val * weight
     total_weighted_points = sum([raw_scores['s_e']*w_e, raw_scores['s_i']*w_i, raw_scores['s_h']*w_h, raw_scores['s_s']*w_s])
     pct_contrib = (weighted_contrib / total_weighted_points * 100) if total_weighted_points > 0 else 0
@@ -379,10 +371,7 @@ pillars = [
 for p in sorted(pillars, key=lambda x: raw_scores[x[5]], reverse=True):
     plot_pillar(p[0], p[1], p[2], p[3], p[4], p[5], p[6], p[7], p[8], source=p[9], anchor_id=p[10], source_url=p[11])
 
-
-# ----------------------------
 # 5. ARCGIS COUNTY NEED MAPPING
-# ----------------------------
 st.header("🗺️ ArcGIS County Need Mapping")
 st.markdown("""
 The following spatial data layers illustrate the geographic distribution of need across Los Angeles County. 
@@ -424,7 +413,3 @@ with col_m2:
     else:
         st.info("Map not found at specified path.")
     st.caption("Identifies underserved low-income tracts across the county.")
-
-
-
-
