@@ -8,7 +8,7 @@ import os
 st.set_page_config(layout="wide", page_title="GKG Impact Dashboard")
 
 # --- Weigh the data here!! ---
-ESJM = 1.0
+Eniro = 1.0
 Income = 1.0
 Heat = 1.0
 Food = 1.0
@@ -16,7 +16,7 @@ Food = 1.0
 # --- SECTION 0: GLOBAL WEIGHT CONFIGURATION ---
 st.sidebar.header("⚖️ Impact Weighting")
 st.sidebar.markdown("Adjust the importance of each pillar. Set to 0 to exclude a factor.")
-w_e = st.sidebar.number_input("Environmental Justice Weight", min_value=0.0, value=EJSM, step=0.1)
+w_e = st.sidebar.number_input("Environmental Justice Weight", min_value=0.0, value=Enviro, step=0.1)
 w_i = st.sidebar.number_input("Income Weight", min_value=0.0, value=Income, step=0.1)
 w_h = st.sidebar.number_input("Heat Burden Weight", min_value=0.0, value=Heat, step=0.1)
 w_s = st.sidebar.number_input("Food Access Weight", min_value=0.0, value=Food, step=0.1)
@@ -424,4 +424,5 @@ with col_m2:
     else:
         st.info("Map not found at specified path.")
     st.caption("Identifies underserved low-income tracts across the county.")
+
 
