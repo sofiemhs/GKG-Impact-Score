@@ -73,8 +73,8 @@ with st.expander("📚 Appendix: Glossary of Terms & Definitions"):
     ### **Technical & Statistical Terms**
     * **Census Tract (GEOID):** A small, relatively permanent statistical subdivision of a county used by the US Census. It is more precise than a ZIP code for measuring local impact.
     * **Monte Carlo Simulation:** A computerized mathematical technique that allows people to account for risk and uncertainty. We use 10,000 "simulated" weight changes to see how stable the Impact Score is.
-    * **Dirichlet Distribution:** A type of probability distribution used in our simulation to ensure that while we shift weights around, they always add up to a logical total.
-    * **Standard Deviation (Volatility):** A measure of how much the score changes when you change the priorities (weights). A low volatility means the area has a high need regardless of which pillar you value most.
+   ways add up to a logical total.
+    * **Standard Deviation:** A measure of how much the score changes when you change the priorities (weights). A low volatility means the area has a high need regardless of which pillar you value most.
     
     ### **Environmental & Social Metrics**
     * **EJSM (Environmental Justice Screening Method):** A scoring system that identifies areas where residents are disproportionately burdened by pollution and social vulnerabilities.
@@ -424,6 +424,7 @@ with col_m2:
     else:
         st.info("Map not found at specified path.")
     st.caption("Identifies underserved low-income tracts across the county.")
+
 
 
 
