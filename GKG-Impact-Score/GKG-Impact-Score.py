@@ -8,7 +8,7 @@ import os
 st.set_page_config(layout="wide", page_title="GKG Impact Dashboard")
 
 # --- Weigh the data here!! ---
-Enviro = 0
+Enviro = 0.0
 Income = 1.0
 Heat = 1.0
 Food = 1.0
@@ -424,4 +424,5 @@ with col_m2:
     else:
         st.info("Map not found at specified path.")
     st.caption("Identifies underserved low-income tracts across the county.")
+
 
