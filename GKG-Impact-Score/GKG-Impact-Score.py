@@ -8,19 +8,19 @@ import os
 st.set_page_config(layout="wide", page_title="GKG Impact Dashboard")
 
 # --- SECTION 0: GLOBAL WEIGHT CONFIGURATION ---
-# (Adjust weights here to update the entire dashboard)
-w_e = 1.0  # Environmental Justice (EJSM)
-w_i = 1.0  # Median Household Income
-w_h = 1.0  # Heat Burden (Temperature)
-w_s = 1.0  # Food Access (SNAP)
+st.sidebar.header("⚖️ Impact Weighting")
+st.sidebar.markdown("Adjust the importance of each pillar. Set to 0 to exclude a factor.")
+w_e = st.sidebar.number_input("Environmental Justice Weight", min_value=0.0, value=1.0, step=0.1)
+w_i = st.sidebar.number_input("Income Weight", min_value=0.0, value=1.0, step=0.1)
+w_h = st.sidebar.number_input("Heat Burden Weight", min_value=0.0, value=1.0, step=0.1)
+w_s = st.sidebar.number_input("Food Access Weight", min_value=0.0, value=1.0, step=0.1)
+
 weights_list = [w_e, w_i, w_h, w_s]
 
 # --- SECTION 1: MISSION & PILLAR LOGIC ---
 st.title("🌿 Good Karma Gardens: Impact Score Analysis")
 
 with st.expander("📖 Methodology, Data Sources & Years"):
-    # Using fr""" (Raw Formatted String) to handle LaTeX backslashes and variables
-    # Literal LaTeX braces are doubled {{ }} to avoid NameErrors.
     st.markdown(fr"""
     ### **The Question We Are Answering**
     "What impact does Good Karma Gardens' work have when converting spaces into gardens based on their location?"
@@ -178,16 +178,27 @@ if missing_info_count >= 3:
 
 # --- CUSTOM WEIGHING CALCULATION ---
 total_weight_sum = sum(weights_list)
-actual_score = 4 * ( (raw_scores['s_e'] * w_e) + (raw_scores['s_i'] * w_i) + (raw_scores['s_h'] * w_h) + (raw_scores['s_s'] * w_s) ) / total_weight_sum
+
+if total_weight_sum == 0:
+    actual_score = 0.0
+    st.sidebar.warning("Total weight is 0. Impact score cannot be calculated.")
+else:
+    actual_score = 4 * ( (raw_scores['s_e'] * w_e) + (raw_scores['s_i'] * w_i) + (raw_scores['s_h'] * w_h) + (raw_scores['s_s'] * w_s) ) / total_weight_sum
 
 # Monte Carlo: 10,000 simulations
-# Use Dirichlet Distribution centered on your target weights so the Mean matches the Impact Score.
 x_matrix = df_comb[['s_e', 's_i', 's_h', 's_s']].to_numpy()
-target_ratios = np.array(weights_list) / total_weight_sum
-sim_weights = np.random.dirichlet(target_ratios * 30, 10000) 
-sim_results = np.dot(sim_weights, x_matrix.T) * 4
-local_sims = sim_results[:, idx_row]
-m_loc, s_loc = norm.fit(local_sims)
+if total_weight_sum > 0:
+    target_ratios = np.array(weights_list) / total_weight_sum
+    # Dirichlet needs strictly positive alpha. We add a tiny epsilon to 0-weight items to allow simulation.
+    alpha_vals = np.maximum(target_ratios * 30, 0.0001)
+    sim_weights = np.random.dirichlet(alpha_vals, 10000) 
+    sim_results = np.dot(sim_weights, x_matrix.T) * 4
+    local_sims = sim_results[:, idx_row]
+    m_loc, s_loc = norm.fit(local_sims)
+else:
+    sim_results = np.zeros((10000, len(df_comb)))
+    local_sims = np.zeros(10000)
+    m_loc, s_loc = 0, 0
 
 # Impact Range Logic
 if actual_score < 0.8: tier, color = "LOW IMPACT", "#2ecc71"
@@ -208,13 +219,15 @@ st.markdown(f"""
 col_l, col_r = st.columns([2, 1])
 with col_l:
     fig_sim, ax_sim = plt.subplots(figsize=(10, 4))
-    ax_sim.hist(local_sims, bins=50, color='#aed6f1', density=True, alpha=0.7)
-    x_range = np.linspace(min(local_sims), max(local_sims), 100)
-    ax_sim.plot(x_range, norm.pdf(x_range, m_loc, s_loc), color='#2e86c1', lw=3)
-    ax_sim.axvline(actual_score, color='#1b4f72', lw=3, label=f'Impact Score (Mean): {actual_score:.2f}')
-    
-    ax_sim.axvline(actual_score - s_loc, color='#e74c3c', ls=':', lw=2, label='Confidence Bounds')
-    ax_sim.axvline(actual_score + s_loc, color='#e74c3c', ls=':', lw=2)
+    if total_weight_sum > 0:
+        ax_sim.hist(local_sims, bins=50, color='#aed6f1', density=True, alpha=0.7)
+        x_range = np.linspace(min(local_sims), max(local_sims), 100)
+        ax_sim.plot(x_range, norm.pdf(x_range, m_loc, s_loc), color='#2e86c1', lw=3)
+        ax_sim.axvline(actual_score, color='#1b4f72', lw=3, label=f'Impact Score (Mean): {actual_score:.2f}')
+        ax_sim.axvline(actual_score - s_loc, color='#e74c3c', ls=':', lw=2, label='Confidence Bounds')
+        ax_sim.axvline(actual_score + s_loc, color='#e74c3c', ls=':', lw=2)
+    else:
+        ax_sim.text(0.5, 0.5, "No Weights Active", ha='center', va='center')
     
     ax_sim.set_title(f"Score Variance Simulation for {zip_in} (10,000 Iterations)")
     ax_sim.set_xlabel("Impact Score")
@@ -279,7 +292,7 @@ else:
 st.divider()
 st.header("🔍 Pillar Deep-Dive")
 
-def plot_pillar(df, col, name, unit, desc, score_key, bins, weight, is_high_danger=True, source="", anchor_id=""):
+def plot_pillar(df, col, name, unit, desc, score_key, bins, weight, is_high_danger=True, source="", anchor_id="", source_url=""):
     st.markdown(f'<div id="{anchor_id}"></div>', unsafe_allow_html=True)
     sub = df[df['GEOID10'] == target_geoid]
     
@@ -302,7 +315,11 @@ def plot_pillar(df, col, name, unit, desc, score_key, bins, weight, is_high_dang
     with col1:
         st.subheader(name)
         st.markdown(f"**Description:** {desc}")
-        st.markdown(f"**Data Source:** {source}")
+        st.markdown(f"**Cite source:** [{source}]({source_url})")
+        
+        if weight == 0:
+            st.info("🚫 **EXCLUDED:** This pillar's weight is set to 0 and is not currently impacting the total score.")
+        
         st.metric(f"ZIP {zip_in} Raw Value", f"{val:,.1f} {unit}")
         st.metric("Pillar Score Contribution", f"{std_val:.3f} / 1.0")
         st.metric("% of Total Impact Score", f"{pct_contrib:.1f}%")
@@ -338,23 +355,23 @@ def plot_pillar(df, col, name, unit, desc, score_key, bins, weight, is_high_dang
 pillars = [
     (df_ejsm, 'CIscore', 'Environmental Justice (EJSM)', 'Points', 
      "This metric evaluates environmental justice across hazard proximity, health risk, social vulnerability, and canopy cover. Scores range from 4 to 20. Areas scoring more than 1 SD below the mean (< 7.65) are identified as having the highest need for community green space.", 
-     's_e', 20, w_e, False, "USC / Occidental College / LA County (2022)", "environmental-justice-ejsm"),
+     's_e', 20, w_e, False, "USC / Occidental College / LA County (2022)", "environmental-justice-ejsm", "https://data.lacounty.gov/apps/lacounty::green-zones-program-ejsm-2/about?path="),
     
     (df_income, 'med_hh_income', 'Median Household Income', '$USD', 
      "Measures the median income for households within the tract. With a county-wide mean income of $93,525, 'Danger Zones' are defined as tracts at or below $53,423. Lower income levels directly correlate to fewer private green spaces and higher climate vulnerability.", 
-     's_i', 250, w_i, False, "US Census Bureau ACS 5-Year Estimates (2021)", "median-household-income"),
+     's_i', 250, w_i, False, "US Census Bureau ACS 5-Year Estimates (2021)", "median-household-income", "https://data.lacounty.gov/datasets/lacounty::median-household-income/about"),
     
     (df_heat, 'DegHourDay', 'Heat Burden', 'Degree Hours per Day', 
      "Measured in 'Degree Hours per Day,' which tracks how many degrees—and for how long—the local temperature exceeds a baseline of 80°F. With a county median of 42.36, areas exceeding 82.61 are 'Danger Zones.' High numbers indicate intense, sustained heat exposure that can be mitigated by garden transpiration.", 
-     's_h', 150, w_h, True, "Safe Clean Water Program LA (2022)", "heat-burden"),
+     's_h', 150, w_h, True, "Safe Clean Water Program LA (2022)", "heat-burden", "https://scwp-lacounty.hub.arcgis.com/datasets/lacounty::urban-heat-island-index/about"),
     
     (df_snap, 'SNAP_pct', 'Food Access (SNAP)', '% Pop', 
      "Calculated as (SNAP Participants / Total Population) * 100. The county mean is 3.15%. 'Danger Zones' exceed 5.52% participation, pinpointing 'food deserts' where gardens alleviate the burden of fresh produce.", 
-     's_s', 150, w_s, True, "USDA Food Access Research Atlas (2019)", "food-access-snap")
+     's_s', 150, w_s, True, "USDA Food Access Research Atlas (2019)", "food-access-snap", "https://geohub.lacity.org/datasets/lacounty::food-deserts/about")
 ]
 
 for p in sorted(pillars, key=lambda x: raw_scores[x[5]], reverse=True):
-    plot_pillar(p[0], p[1], p[2], p[3], p[4], p[5], p[6], p[7], p[8], source=p[9], anchor_id=p[10])
+    plot_pillar(p[0], p[1], p[2], p[3], p[4], p[5], p[6], p[7], p[8], source=p[9], anchor_id=p[10], source_url=p[11])
 
 
 # ----------------------------
